@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "🐮 Cowsay",
+      "type": "shell",
+      "command": "cowsay | ${input:phrase}",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "phrase",
+      "description": "Some term",
+      "default": "fortune",
+      "type": "promptString"
+    }
+  ]
+}
