@@ -10,14 +10,18 @@ local parent = nil
 local Tasks = nil
 local Inputs = {}
 
+local function close()
+  Terminal:close()
+end
+
 local function set_parent()
   parent = vim.api.nvim_get_current_win()
 end
 
 local function goto_parent()
-    if parent and vim.api.nvim_win_is_valid(parent) then
-      vim.api.nvim_set_current_win(parent)
-    end
+  if parent and vim.api.nvim_win_is_valid(parent) then
+    vim.api.nvim_set_current_win(parent)
+  end
 end
 
 local process_command = function(command)
@@ -31,6 +35,7 @@ local process_command = function(command)
     current_term = Terminal:new({
       cmd = command,
       hidden = true,
+      close_on_exit = false,
     })
     current_term:open()
     vim.cmd('stopinsert')
@@ -44,10 +49,31 @@ local get_relative_file = function()
   return vim.fn.getcwd() .. vim.fn.bufname()
 end
 
+function Split(s, delimiter)
+  local result = {};
+  for match in (s..delimiter):gmatch("(.-)"..delimiter) do
+    table.insert(result, match);
+  end
+  return result;
+end
+
+local get_last_element = function(path)
+  local split = Split(path, "/")
+  return split[#split]
+end
+
+local get_workspacefolder_basename = function()
+  return get_last_element(vim.fn.getcwd())
+end
+
+local get_file = function()
+  return get_last_element(vim.fn.bufname())
+end
+
 local predefined = {
-  [ "workspaceFolder" ] = nil,
-  [ "workspaceFolderBasename" ] = nil,
-  [ "file" ] = nil,
+  [ "workspaceFolder" ] = vim.fn.cwd,
+  [ "workspaceFolderBasename" ] = get_workspacefolder_basename,
+  [ "file" ] = get_file,
   [ "fileWorkspaceFolder" ] = nil,
   [ "relativeFile" ] = get_relative_file,
   [ "relativeFileDirname" ] = nil,
@@ -184,6 +210,7 @@ local function inputs(opts)
         load_input_variable(input)
       end
 
+
       map('i', '<CR>', start_task)
       map('n', '<CR>', start_task)
 
@@ -219,6 +246,43 @@ local function get_predefined_variables(command)
   return predefined_vars, count
 end
 
+local extract_variables = function(command)
+  local input_vars = get_input_variables(command)
+  local predefined_vars = get_predefined_variables(command)
+  local missing = {}
+  for _, input_var in pairs(input_vars) do
+    local found = false
+    for name, _ in pairs(Inputs) do
+      if name == input_var then
+        found = true
+      end
+    end
+    if not found then
+      table.insert(missing, input_var)
+    end
+  end
+  for _, input in pairs(missing) do
+    load_input_variable(input)
+  end
+  return input_vars, predefined_vars
+end
+
+local function replace_vars_in_command(command, input_vars, predefined_vars)
+  for _, replacing in pairs(input_vars) do
+    local replace_pattern = "${input:" .. replacing .. "}"
+    command = string.gsub(command, replace_pattern, get_input_variable(replacing))
+  end
+
+  for _, replacing in pairs(predefined_vars) do
+    local func = get_predefined_function(replacing)
+    if func ~= nil then
+      local replace_pattern = "${" .. replacing .. "}"
+      command = string.gsub(command, replace_pattern, func())
+    end
+  end
+  return command
+end
+
 local function tasks(opts)
   opts = opts or {}
 
@@ -248,43 +312,41 @@ local function tasks(opts)
         actions.close(prompt_bufnr)
 
         local command = task_list[selection.index]["command"]
-
-        local input_vars = get_input_variables(command)
-        local predefined_vars = get_predefined_variables(command)
-        local missing = {}
-        for _, input_var in pairs(input_vars) do
-          local found = false
-          for name, _ in pairs(Inputs) do
-            if name == input_var then
-              found = true
-            end
-          end
-          if not found then
-            table.insert(missing, input_var)
-          end
-        end
-        for _, input in pairs(missing) do
-          load_input_variable(input)
-        end
-
-        for _, replacing in pairs(input_vars) do
-          local replace_pattern = "${input:" .. replacing .. "}"
-          command = string.gsub(command, replace_pattern, get_input_variable(replacing))
-        end
-
-        for _, replacing in pairs(predefined_vars) do
-          local func = get_predefined_function(replacing)
-          if func ~= nil then
-            local replace_pattern = "${" .. replacing .. "}"
-            command = string.gsub(command, replace_pattern, func())
-          end
-        end
+        local input_vars, predefined_vars = extract_variables(command)
+        command = replace_vars_in_command(command, input_vars, predefined_vars)
         process_command(command)
+      end
+
+      local start_in_vert = function()
+        local selection = actions.get_selected_entry(prompt_bufnr)
+        actions.close(prompt_bufnr)
+
+        local command = task_list[selection.index]["command"]
+        local input_vars, predefined_vars = extract_variables(command)
+        command = replace_vars_in_command(command, input_vars, predefined_vars)
+        vim.cmd('vsplit | terminal ' .. command)
+        vim.cmd('stopinsert')
+        vim.cmd('normal! G')
+      end
+
+      local start_in_split = function()
+        local selection = actions.get_selected_entry(prompt_bufnr)
+        actions.close(prompt_bufnr)
+
+        local command = task_list[selection.index]["command"]
+        local input_vars, predefined_vars = extract_variables(command)
+        command = replace_vars_in_command(command, input_vars, predefined_vars)
+        vim.cmd('split | terminal ' .. command)
+        vim.cmd('stopinsert')
+        vim.cmd('normal! G')
       end
 
       map('i', '<CR>', start_task)
       map('n', '<CR>', start_task)
-
+      map('i', '<C-v>', start_in_vert)
+      map('n', '<C-v>', start_in_vert)
+      map('i', '<C-p>', start_in_split)
+      map('n', '<C-p>', start_in_split)
       return true
     end
   }):find()
@@ -297,6 +359,7 @@ return require('telescope').register_extension {
   exports = {
     load_process_command_func = load_process_command_func,
     tasks = tasks,
-    inputs = inputs
+    inputs = inputs,
+    close = close
   }
 }
