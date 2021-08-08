@@ -1,6 +1,6 @@
 # VS Tasks
 
-Load and run tasks in a project that conform to VS Code's [Editor Tasks](https://code.visualstudio.com/docs/editor/tasks)
+Telescope plugin to load and run tasks in a project that conform to VS Code's [Editor Tasks](https://code.visualstudio.com/docs/editor/tasks)
 
 ## Features
 
@@ -8,6 +8,12 @@ Load and run tasks in a project that conform to VS Code's [Editor Tasks](https:/
     - run tasks in a horizontal or vertical split terminal
 - ✏️  edit input variables that will be used for the session
 - Use VS Code's [variables](https://code.visualstudio.com/docs/editor/variables-reference) in the command (limited support, see desired features)
+
+## Example
+
+Short Demo
+
+![](./demos/example.gif)
 
 ## Setup and usage
 
