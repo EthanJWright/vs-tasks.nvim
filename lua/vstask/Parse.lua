@@ -86,7 +86,7 @@ local extract_variables = function(command, inputs)
   for _, input_var in pairs(input_vars) do
     local found = false
     for name, _ in pairs(inputs) do
-      if name == input_var then
+      if name == input_var["id"] then
         found = true
       end
     end

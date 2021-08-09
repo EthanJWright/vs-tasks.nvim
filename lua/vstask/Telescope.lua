@@ -55,6 +55,7 @@ local function inputs(opts)
   end
 
   local  inputs_formatted = {}
+  local selection_list = {}
 
   for _, input_dict in pairs(input_list) do
     local add_current = ""
@@ -63,6 +64,7 @@ local function inputs(opts)
     end
     local current_task = input_dict["id"] .. add_current .. " => " .. input_dict["description"]
     table.insert(inputs_formatted, current_task)
+    table.insert(selection_list, input_dict)
   end
 
   pickers.new(opts, {
@@ -77,7 +79,7 @@ local function inputs(opts)
         local selection = actions.get_selected_entry(prompt_bufnr)
         actions.close(prompt_bufnr)
 
-        local input = input_list[selection.index]["id"]
+        local input = selection_list[selection.index]["id"]
         Parse.Set(input)
       end
 
