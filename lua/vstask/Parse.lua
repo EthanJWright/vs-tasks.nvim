@@ -1,5 +1,4 @@
 local Inputs = {}
-
 local Config = require("vstask.Config")
 local Predefined = require('vstask.Predefined')
 
@@ -79,7 +78,6 @@ local function get_predefined_variables(command)
 end
 
 local extract_variables = function(command, inputs)
-
   local input_vars = get_input_variables(command)
   local predefined_vars = get_predefined_variables(command)
   local missing = {}

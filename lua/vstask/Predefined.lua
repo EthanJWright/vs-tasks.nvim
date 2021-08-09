@@ -1,3 +1,6 @@
+-- split a string into a table
+-- @param s string to split
+-- @param delimiter substring to split on
 function Split(s, delimiter)
   local result = {};
   for match in (s..delimiter):gmatch("(.-)"..delimiter) do
@@ -6,7 +9,10 @@ function Split(s, delimiter)
   return result;
 end
 
-local get_last_element = function(path)
+-- get filename from path string
+-- returns the filename from a absolute path
+-- @param path character to split on
+local get_filename = function(path)
   local split = Split(path, "/")
   return split[#split]
 end
@@ -16,11 +22,11 @@ local get_relative_file = function()
 end
 
 local get_file = function()
-  return get_last_element(vim.fn.bufname())
+  return get_filename(vim.fn.bufname())
 end
 
 local get_workspacefolder_basename = function()
-  return get_last_element(vim.fn.getcwd())
+  return get_filename(vim.fn.getcwd())
 end
 
 return {

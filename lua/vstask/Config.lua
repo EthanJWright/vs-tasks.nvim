@@ -32,8 +32,6 @@ local load_setting_json = function(path)
   return decoded
 end
 
-
-
 return {
   load_json = load_setting_json
 }
