@@ -147,12 +147,25 @@ local function tasks(opts)
         vim.cmd('normal! G')
       end
 
+      local start_in_tab = function()
+        local selection = actions.get_selected_entry(prompt_bufnr)
+        actions.close(prompt_bufnr)
+
+        local command = task_list[selection.index]["command"]
+        command = Parse.replace(command)
+        vim.cmd('tabnew | terminal ' .. command)
+        vim.cmd('stopinsert')
+        vim.cmd('normal! G')
+      end
+
       map('i', '<CR>', start_task)
       map('n', '<CR>', start_task)
       map('i', '<C-v>', start_in_vert)
       map('n', '<C-v>', start_in_vert)
       map('i', '<C-p>', start_in_split)
       map('n', '<C-p>', start_in_split)
+      map('i', '<C-t>', start_in_tab)
+      map('n', '<C-t>', start_in_tab)
       return true
     end
   }):find()
