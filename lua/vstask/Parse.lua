@@ -10,6 +10,7 @@ local function get_inputs()
     if Inputs[input_dict["id"]] == nil then
       Inputs[input_dict["id"]] = input_dict
       if Inputs[input_dict["id"]] == nil or Inputs[input_dict["id"]]["value"] == nil then
+        print("Setting [" .. input_dict["id"] .. "] to default")
         Inputs[input_dict["id"]]["value"] = input_dict["default"]
       end
     end
@@ -83,8 +84,8 @@ local extract_variables = function(command, inputs)
   local missing = {}
   for _, input_var in pairs(input_vars) do
     local found = false
-    for name, _ in pairs(inputs) do
-      if name == input_var["id"] then
+    for _, stored_inputs in pairs(inputs) do
+      if stored_inputs["id"] == input_var then
         found = true
       end
     end
