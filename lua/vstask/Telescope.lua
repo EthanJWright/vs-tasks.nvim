@@ -4,45 +4,19 @@ local pickers = require('telescope.pickers')
 local sorters = require('telescope.sorters')
 
 local Parse = require('vstask.Parse')
-local parent = nil
-local process_cmd = nil
+local Command_handler = nil
 
-local Terminal = require('toggleterm.terminal').Terminal
-local current_term = nil
-
-local function close()
-  Terminal:close()
-end
-
-local function set_parent()
-  parent = vim.api.nvim_get_current_win()
-end
-
-local function goto_parent()
-  if parent and vim.api.nvim_win_is_valid(parent) then
-    vim.api.nvim_set_current_win(parent)
-  end
-end
 
 local process_command = function(command)
-  if process_cmd ~= nil then
-    process_cmd(command)
+  if Command_handler ~= nil then
+    Command_handler(command)
   else
-    set_parent()
-    if current_term ~= nil then
-      current_term:close()
-    end
-    current_term = Terminal:new({
-      cmd = command,
-      hidden = true,
-      close_on_exit = false,
-    })
-    current_term:open()
-    vim.cmd('stopinsert')
-    vim.cmd('normal! G')
-    goto_parent()
-    vim.cmd('stopinsert')
+    vim.cmd('terminal ' .. command)
   end
+end
+
+local function set_command_handler(handler)
+  Command_handler = handler
 end
 
 local function inputs(opts)
@@ -131,8 +105,8 @@ local function tasks(opts)
 
         local command = task_list[selection.index]["command"]
         command = Parse.replace(command)
-        vim.cmd('vsplit | terminal ' .. command)
-        vim.cmd('stopinsert')
+        vim.cmd('vsplit')
+        process_command(command)
         vim.cmd('normal! G')
       end
 
@@ -142,8 +116,8 @@ local function tasks(opts)
 
         local command = task_list[selection.index]["command"]
         command = Parse.replace(command)
-        vim.cmd('split | terminal ' .. command)
-        vim.cmd('stopinsert')
+        vim.cmd('split')
+        process_command(command)
         vim.cmd('normal! G')
       end
 
@@ -153,8 +127,8 @@ local function tasks(opts)
 
         local command = task_list[selection.index]["command"]
         command = Parse.replace(command)
-        vim.cmd('tabnew | terminal ' .. command)
-        vim.cmd('stopinsert')
+        vim.cmd('tabnew')
+        process_command(command)
         vim.cmd('normal! G')
       end
 
@@ -174,5 +148,5 @@ end
 return {
   Tasks = tasks,
   Inputs = inputs,
-  Close = close
+  Set_command_handler = set_command_handler,
 }

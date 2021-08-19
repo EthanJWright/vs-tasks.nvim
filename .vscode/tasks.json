@@ -12,7 +12,7 @@
     {
       "id": "phrase",
       "description": "Some term",
-      "default": "Hello, world!",
+      "default": "",
       "type": "promptString"
     }
   ]
