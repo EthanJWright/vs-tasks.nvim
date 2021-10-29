@@ -100,24 +100,7 @@ lua require("telescope").extensions.vstask.close() -- close the task runner (if 
 
 ### Full VS Code variable support
 
-Currently only a handful of variables for VS Code are supported, see the implemented list here:
-
-- [x] workspaceFolder
-- [x] workspaceFolderBasename
-- [x] file
-- [ ] fileWorkspaceFolder
-- [x] relativeFile
-- [ ] relativeFileDirname
-- [ ] fileBasename
-- [ ] fileBasenameNoExtension
-- [ ] fileDirname
-- [ ] fileExtname
-- [ ] cwd
-- [ ] lineNumber
-- [ ] selectedText
-- [ ] execPath
-- [ ] defaultBuildTask
-- [ ] pathSeparator
+All [variables available in VS Code](https://code.visualstudio.com/docs/editor/variables-reference) should also work in this plugin, though they are not all tested.
 
 ### Extend support for VS Code schema
 
