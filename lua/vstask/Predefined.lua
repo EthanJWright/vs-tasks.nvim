@@ -23,13 +23,17 @@ local get_filename = function(path)
   return split[#split]
 end
 
-local get_relative_file_dirname = function()
-  local sep = get_path_seperator()
-  local path = vim.fn.expand("%:p:h") -- get the path
-  local split = Split(path, sep) -- split on /
-  table.remove(split, #split) -- remove filename
-  return table.concat(split, sep) -- join back together
+-- get the current opened file's dirname relative to workspaceFolder
+-- @param workspaceFolder the workspace folder
+-- @param filePath the file path
+-- @return the relative path to the file
+-- @return the filename
+local get_relative_path = function(workspaceFolder, filePath)
+  local filename = get_filename(filePath)
+  local relativePath = filePath:gsub(workspaceFolder, "")
+  return relativePath, filename
 end
+
 
 -- get the current opened files base name (without extension)
 local get_current_file_basename_no_extension = function()
@@ -111,6 +115,19 @@ end
 
 local get_workspacefolder_basename = function()
   return get_filename(vim.fn.getcwd())
+end
+
+local get_relative_file_dirname = function()
+  local sep = get_path_seperator()
+  local workspaceFolder = get_file_workspace_folder()
+  local filePath = get_relative_file()
+  local relativePath, filename = get_relative_path(workspaceFolder, filePath)
+  local relativeFileDirname = Split(relativePath, filename)[1]
+  -- if the last char is / then remove it
+  if relativeFileDirname:sub(-1) == sep then
+    relativeFileDirname = relativeFileDirname:sub(1, -2)
+  end
+  return relativeFileDirname
 end
 
 return {
