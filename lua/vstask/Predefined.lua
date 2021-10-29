@@ -11,7 +11,7 @@ end
 
 -- get the path seperator for the current os
 local get_path_seperator = function()
-  return vim.fn.pathsep()
+  return "/"
 end
 
 -- get filename from path string
