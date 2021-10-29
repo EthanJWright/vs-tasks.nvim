@@ -129,6 +129,6 @@ return {
   [ "selectedText" ] = get_selected_text,
   [ "execPath" ] = get_exec_path,
   [ "defaultBuildTask" ] = nil,
-  [ "pathSeparator" ] = nil
+  [ "pathSeparator" ] = get_path_seperator
 }
 
