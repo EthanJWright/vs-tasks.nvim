@@ -17,6 +17,13 @@ local get_filename = function(path)
   return split[#split]
 end
 
+local get_relative_file_dirname = function()
+  local path = vim.fn.expand("%:p:h") -- get the path
+  local split = Split(path, "/") -- split on /
+  table.remove(split, #split) -- remove filename
+  return table.concat(split, "/") -- join back together
+end
+
 local get_relative_file = function()
   return vim.fn.bufname()
 end
@@ -35,7 +42,7 @@ return {
   [ "file" ] = get_file,
   [ "fileWorkspaceFolder" ] = nil,
   [ "relativeFile" ] = get_relative_file,
-  [ "relativeFileDirname" ] = nil,
+  [ "relativeFileDirname" ] = get_relative_file_dirname,
   [ "fileBasename" ] = nil,
   [ "fileBasenameNoExtension" ] = nil,
   [ "fileDirname" ] = nil,

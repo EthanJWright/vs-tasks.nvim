@@ -8,9 +8,15 @@
       "problemMatcher": []
     },
     {
-      "label": "relative file",
+      "label": "Relative File",
       "type": "shell",
       "command": "echo ${relativeFile} | cowsay",
+      "problemMatcher": []
+    },
+    {
+      "label": "Relative File Dirname",
+      "type": "shell",
+      "command": "echo ${relativeFileDirname} | cowsay",
       "problemMatcher": []
     }
   ],
