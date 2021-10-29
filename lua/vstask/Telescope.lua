@@ -1,4 +1,5 @@
 local actions = require('telescope.actions')
+local state  = require('telescope.actions.state')
 local finders = require('telescope.finders')
 local pickers = require('telescope.pickers')
 local sorters = require('telescope.sorters')
@@ -50,7 +51,7 @@ local function inputs(opts)
     attach_mappings = function(prompt_bufnr, map)
 
       local start_task = function()
-        local selection = actions.get_selected_entry(prompt_bufnr)
+        local selection = state.get_selected_entry(prompt_bufnr)
         actions.close(prompt_bufnr)
 
         local input = selection_list[selection.index]["id"]
@@ -91,7 +92,7 @@ local function tasks(opts)
     attach_mappings = function(prompt_bufnr, map)
 
       local start_task = function()
-        local selection = actions.get_selected_entry(prompt_bufnr)
+        local selection = state.get_selected_entry(prompt_bufnr)
         actions.close(prompt_bufnr)
 
         local command = task_list[selection.index]["command"]
@@ -100,7 +101,7 @@ local function tasks(opts)
       end
 
       local start_in_vert = function()
-        local selection = actions.get_selected_entry(prompt_bufnr)
+        local selection = state.get_selected_entry(prompt_bufnr)
         actions.close(prompt_bufnr)
 
         local command = task_list[selection.index]["command"]
@@ -111,7 +112,7 @@ local function tasks(opts)
       end
 
       local start_in_split = function()
-        local selection = actions.get_selected_entry(prompt_bufnr)
+        local selection = state.get_selected_entry(prompt_bufnr)
         actions.close(prompt_bufnr)
 
         local command = task_list[selection.index]["command"]
@@ -122,7 +123,7 @@ local function tasks(opts)
       end
 
       local start_in_tab = function()
-        local selection = actions.get_selected_entry(prompt_bufnr)
+        local selection = state.get_selected_entry(prompt_bufnr)
         actions.close(prompt_bufnr)
 
         local command = task_list[selection.index]["command"]

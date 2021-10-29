@@ -18,7 +18,7 @@ local get_filename = function(path)
 end
 
 local get_relative_file = function()
-  return vim.fn.getcwd() .. vim.fn.bufname()
+  return vim.fn.bufname()
 end
 
 local get_file = function()

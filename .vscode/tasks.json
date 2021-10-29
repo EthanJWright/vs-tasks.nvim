@@ -6,6 +6,12 @@
       "type": "shell",
       "command": "echo ${input:phrase} | cowsay",
       "problemMatcher": []
+    },
+    {
+      "label": "relative file",
+      "type": "shell",
+      "command": "echo ${relativeFile} | cowsay",
+      "problemMatcher": []
     }
   ],
   "inputs": [

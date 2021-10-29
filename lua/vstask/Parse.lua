@@ -106,7 +106,7 @@ local function replace_vars_in_command(command)
   end
 
   for _, replacing in pairs(predefined_vars) do
-    local func = get_predefined_function(replacing)
+    local func = get_predefined_function(replacing, Predefined)
     if func ~= nil then
       local replace_pattern = "${" .. replacing .. "}"
       command = string.gsub(command, replace_pattern, func())
