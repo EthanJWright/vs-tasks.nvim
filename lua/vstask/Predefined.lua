@@ -9,6 +9,10 @@ function Split(s, delimiter)
   return result;
 end
 
+local get_relative_file = function()
+  return vim.fn.bufname()
+end
+
 -- get the path seperator for the current os
 local get_path_seperator = function()
   return "/"
@@ -38,7 +42,7 @@ end
 -- get the current opened files base name (without extension)
 local get_current_file_basename_no_extension = function()
   local sep = get_path_seperator()
-  local path = vim.fn.expand("%:p:h") -- get the path
+  local path = get_relative_file() -- get the path
   local split = Split(path, sep) -- split on /
   local filename = split[#split] -- get the filename
   split = Split(filename, ".") -- split on .
@@ -49,7 +53,7 @@ end
 -- get the current opened files base name
 local get_current_file_basename = function()
   local sep = get_path_seperator()
-  local path = vim.fn.expand("%:p:h") -- get the path
+  local path = get_relative_file() -- get the path
   local split = Split(path, sep) -- split on /
   local filename = split[#split] -- get the filename
   return filename
@@ -58,7 +62,7 @@ end
 -- get current opened files dirname
 local get_current_file_dirname = function()
   local sep = get_path_seperator()
-  local path = vim.fn.expand("%:p:h") -- get the path
+  local path = get_relative_file() -- get the path
   local split = Split(path, sep) -- split on /
   table.remove(split, #split) -- remove filename
   return table.concat(split, sep) -- join back together
@@ -67,7 +71,7 @@ end
 -- get the current open files extension
 local get_current_file_extension = function()
   local sep = get_path_seperator()
-  local path = vim.fn.expand("%:p:h") -- get the path
+  local path = get_relative_file() -- get the path
   local split = Split(path, sep) -- split on /
   local filename = split[#split] -- get the filename
   split = Split(filename, ".") -- split on .
@@ -95,9 +99,6 @@ local get_exec_path = function()
 end
 
 
-local get_relative_file = function()
-  return vim.fn.bufname()
-end
 
 local get_file = function()
   return get_filename(vim.fn.bufname())
@@ -106,7 +107,7 @@ end
 -- get the file workspace folder
 local get_file_workspace_folder = function()
   local sep = get_path_seperator()
-  local path = vim.fn.expand("%:p:h") -- get the path
+  local path = get_relative_file()
   local split = Split(path, sep) -- split on /
   table.remove(split, #split) -- remove filename
   table.remove(split, #split) -- remove filename
