@@ -2,9 +2,16 @@ local Inputs = {}
 local Config = require("vstask.Config")
 local Predefined = require('vstask.Predefined')
 
+local function setContains(set, key)
+    return set[key] ~= nil
+end
+
 local function get_inputs()
   local path = vim.fn.getcwd() .."/.vscode/tasks.json"
   local config = Config.load_json(path)
+  if (not setContains(config, "inputs")) then
+    return Inputs
+  end
   local inputs = config["inputs"]
   for _, input_dict in pairs(inputs) do
     if Inputs[input_dict["id"]] == nil then
