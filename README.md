@@ -23,7 +23,6 @@ With Plug:
 Plug 'nvim-lua/popup.nvim'
 Plug 'nvim-lua/plenary.nvim'
 Plug 'nvim-telescope/telescope.nvim' " make sure you have telescope installed
-Plug 'akinsho/nvim-toggleterm.lua' " install toggleterm if you want to use the VS Code style terminal
 Plug 'EthanJWright/vs-tasks.nvim'
 ```
 
