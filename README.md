@@ -26,6 +26,17 @@ Plug 'nvim-telescope/telescope.nvim' " make sure you have telescope installed
 Plug 'EthanJWright/vs-tasks.nvim'
 ```
 
+```vim
+use {
+  'EthanJWright/vs-tasks.nvim',
+  requires = {
+    'nvim-lua/popup.nvim',
+    'nvim-lua/plenary.nvim',
+    'nvim-telescope/telescope.nvim'
+  }
+}
+```
+
 Set up keybindings:
 
 ```vim
