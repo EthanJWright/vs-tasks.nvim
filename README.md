@@ -26,6 +26,8 @@ Plug 'nvim-telescope/telescope.nvim' " make sure you have telescope installed
 Plug 'EthanJWright/vs-tasks.nvim'
 ```
 
+With Packer:
+
 ```vim
 use {
   'EthanJWright/vs-tasks.nvim',
