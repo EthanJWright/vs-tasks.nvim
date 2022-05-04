@@ -51,13 +51,20 @@ nnoremap <Leader>tt :lua require("telescope").extensions.vstask.close()<CR>
   - Ctrl-v will open in a vertical split terminal
   - Ctrl-p will open in a split terminal
 
+## Configuration
 
 Configure harpoon use (auto cache terminals based on task)
 
 ```vim
 lua <<EOF
 require("vstask").setup({
-  use_harpoon = true
+  use_harpoon = true, -- use harpoon to auto cache terminals
+  telescope_keys = { -- change the telescope bindings used to launch tasks
+      vertical = '<C-v>',
+      split = '<C-p>',
+      tab = '<C-t>',
+      current = '<CR>',
+  }
 })
 EOF
 ```

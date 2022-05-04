@@ -6,6 +6,27 @@ local sorters = require('telescope.sorters')
 
 local Parse = require('vstask.Parse')
 local Command_handler = nil
+local Mappings = {
+  vertical = '<C-v>',
+  split = '<C-p>',
+  tab = '<C-t>',
+  current = '<CR>'
+}
+
+local function set_mappings(new_mappings)
+  if new_mappings.vertical ~= nil then
+    Mappings.vertical = new_mappings.vertical
+  end
+  if new_mappings.split ~= nil then
+    Mappings.split = new_mappings.split
+  end
+  if new_mappings.tab ~= nil then
+    Mappings.tab = new_mappings.tab
+  end
+  if new_mappings.current ~= nil then
+    Mappings.current = new_mappings.current
+  end
+end
 
 
 local process_command = function(command)
@@ -133,14 +154,14 @@ local function tasks(opts)
         vim.cmd('normal! G')
       end
 
-      map('i', '<CR>', start_task)
-      map('n', '<CR>', start_task)
-      map('i', '<C-v>', start_in_vert)
-      map('n', '<C-v>', start_in_vert)
-      map('i', '<C-p>', start_in_split)
-      map('n', '<C-p>', start_in_split)
-      map('i', '<C-t>', start_in_tab)
-      map('n', '<C-t>', start_in_tab)
+      map('i', Mappings.current, start_task)
+      map('n', Mappings.current, start_task)
+      map('i', Mappings.vertical, start_in_vert)
+      map('n', Mappings.vertical, start_in_vert)
+      map('i', Mappings.split, start_in_split)
+      map('n', Mappings.split, start_in_split)
+      map('i', Mappings.tab, start_in_tab)
+      map('n', Mappings.tab, start_in_tab)
       return true
     end
   }):find()
@@ -150,4 +171,5 @@ return {
   Tasks = tasks,
   Inputs = inputs,
   Set_command_handler = set_command_handler,
+  Set_mappings = set_mappings
 }
