@@ -2,12 +2,28 @@ local Inputs = {}
 local Config = require("vstask.Config")
 local Predefined = require('vstask.Predefined')
 
+local MISSING_FILE_MESSAGE = "tasks.json file could not be found."
+
+local function file_exists(name)
+  local f = io.open(name, "r")
+  if f ~= nil then
+    io.close(f)
+    return true
+  else
+    return false
+  end
+end
+
 local function setContains(set, key)
     return set[key] ~= nil
 end
 
 local function get_inputs()
   local path = vim.fn.getcwd() .."/.vscode/tasks.json"
+  if not file_exists(path) then
+    vim.notify(MISSING_FILE_MESSAGE, "error")
+    return {}
+  end
   local config = Config.load_json(path)
   if (not setContains(config, "inputs")) then
     return Inputs
@@ -26,6 +42,10 @@ end
 
 local function get_tasks()
   local path = vim.fn.getcwd() .."/.vscode/tasks.json"
+  if not file_exists(path) then
+    vim.notify(MISSING_FILE_MESSAGE, "error")
+    return {}
+  end
   get_inputs()
   local tasks = Config.load_json(path)
   Tasks = tasks["tasks"]
