@@ -134,6 +134,13 @@ lua require("telescope").extensions.vstask.tasks() -- open task list in telescop
 lua require("telescope").extensions.vstask.inputs() -- open the input list, set new input
 lua require("telescope").extensions.vstask.close() -- close the task runner (if toggleterm)
 ```
+
+You can also configure themes and pass options to the picker
+
+```lua
+lua require("telescope").extensions.vstask.tasks(require('telescope.themes').get_dropdown()) -- open task list in telescope
+```
+
 ## Features to implement
 
 ### Full VS Code variable support
