@@ -3,8 +3,8 @@ local state  = require('telescope.actions.state')
 local finders = require('telescope.finders')
 local pickers = require('telescope.pickers')
 local sorters = require('telescope.sorters')
-
 local Parse = require('vstask.Parse')
+local Opts = require('vstask.Opts')
 local Command_handler = nil
 local Mappings = {
   vertical = '<C-v>',
@@ -13,27 +13,10 @@ local Mappings = {
   current = '<CR>'
 }
 
-local Term_opts = {
-  vertical = {
-    direction = "vertical",
-    size = "80"
-  },
-  horizontal = {
-    direction = "horizontal",
-    size = "10"
-  },
-  current = {
-    direction = "float",
-  },
-  tab = {
-    direction = 'tab',
-  }
-}
+local Term_opts = {}
 
 local function set_term_opts(new_opts)
-  if new_opts.direction ~= nil then
-    Term_opts.direction = new_opts.direction
-  end
+    Term_opts= new_opts
 end
 
 local function set_mappings(new_mappings)
@@ -56,18 +39,21 @@ local process_command = function(command, direction, opts)
   if Command_handler ~= nil then
     Command_handler(command, direction, opts)
   else
-    if direction == 'vertical'
-    then
-      vim.cmd('vsplit')
-      vim.cmd('vertical resize ' .. opts.vertical.size)
-    elseif direction == 'horizontal'
-    then
-        vim.cmd('split')
-        vim.cmd('resize ' .. opts.horizontal.size)
-    elseif direction == 'tab'
-    then
-        vim.cmd('tabnew')
+    local opt_direction = Opts.get_direction(direction, opts)
+    local size = Opts.get_size(direction, opts)
+    local command_map = {
+      vertical = { size = 'vertical resize', command = 'vsplit' },
+      horizontal = { size = 'resize ', command = 'split' },
+      tab = { command = 'tabnew' },
+    }
+
+    if command_map[opt_direction] ~= nil then
+      vim.cmd(command_map[opt_direction].command)
+      if command_map[opt_direction].size ~= nil  and size ~= nil then
+        vim.cmd(command_map[opt_direction].size .. size)
+      end
     end
+
     vim.cmd('terminal ' .. command)
   end
 end
