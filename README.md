@@ -53,7 +53,9 @@ nnoremap <Leader>tt :lua require("telescope").extensions.vstask.close()<CR>
 
 ## Configuration
 
-Configure harpoon use (auto cache terminals based on task)
+- Configure harpoon use (auto cache terminals based on task)
+- Configure toggle term use
+- Configure terminal behavior
 
 ```vim
 lua <<EOF
@@ -64,6 +66,23 @@ require("vstask").setup({
       split = '<C-p>',
       tab = '<C-t>',
       current = '<CR>',
+  },
+  terminal = 'toggleterm',
+  term_opts = {
+    vertical = {
+      direction = "vertical",
+      size = "80"
+    },
+    horizontal = {
+      direction = "horizontal",
+      size = "10"
+    },
+    current = {
+      direction = "float",
+    },
+    tab = {
+      direction = 'tab',
+    }
   }
 })
 EOF

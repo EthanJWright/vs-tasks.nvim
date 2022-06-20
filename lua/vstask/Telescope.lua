@@ -13,6 +13,29 @@ local Mappings = {
   current = '<CR>'
 }
 
+local Term_opts = {
+  vertical = {
+    direction = "vertical",
+    size = "80"
+  },
+  horizontal = {
+    direction = "horizontal",
+    size = "10"
+  },
+  current = {
+    direction = "float",
+  },
+  tab = {
+    direction = 'tab',
+  }
+}
+
+local function set_term_opts(new_opts)
+  if new_opts.direction ~= nil then
+    Term_opts.direction = new_opts.direction
+  end
+end
+
 local function set_mappings(new_mappings)
   if new_mappings.vertical ~= nil then
     Mappings.vertical = new_mappings.vertical
@@ -29,10 +52,22 @@ local function set_mappings(new_mappings)
 end
 
 
-local process_command = function(command)
+local process_command = function(command, direction, opts)
   if Command_handler ~= nil then
-    Command_handler(command)
+    Command_handler(command, direction, opts)
   else
+    if direction == 'vertical'
+    then
+      vim.cmd('vsplit')
+      vim.cmd('vertical resize ' .. opts.vertical.size)
+    elseif direction == 'horizontal'
+    then
+        vim.cmd('split')
+        vim.cmd('resize ' .. opts.horizontal.size)
+    elseif direction == 'tab'
+    then
+        vim.cmd('tabnew')
+    end
     vim.cmd('terminal ' .. command)
   end
 end
@@ -118,17 +153,15 @@ local function tasks(opts)
 
         local command = task_list[selection.index]["command"]
         command = Parse.replace(command)
-        process_command(command)
+        process_command(command, 'current', Term_opts)
       end
 
       local start_in_vert = function()
         local selection = state.get_selected_entry(prompt_bufnr)
         actions.close(prompt_bufnr)
-
         local command = task_list[selection.index]["command"]
         command = Parse.replace(command)
-        vim.cmd('vsplit')
-        process_command(command)
+        process_command(command, 'vertical', Term_opts)
         vim.cmd('normal! G')
       end
 
@@ -138,8 +171,7 @@ local function tasks(opts)
 
         local command = task_list[selection.index]["command"]
         command = Parse.replace(command)
-        vim.cmd('split')
-        process_command(command)
+        process_command(command, 'horizontal', Term_opts)
         vim.cmd('normal! G')
       end
 
@@ -149,8 +181,7 @@ local function tasks(opts)
 
         local command = task_list[selection.index]["command"]
         command = Parse.replace(command)
-        vim.cmd('tabnew')
-        process_command(command)
+        process_command(command, 'tab', Term_opts)
         vim.cmd('normal! G')
       end
 
@@ -171,5 +202,6 @@ return {
   Tasks = tasks,
   Inputs = inputs,
   Set_command_handler = set_command_handler,
-  Set_mappings = set_mappings
+  Set_mappings = set_mappings,
+  Set_term_opts = set_term_opts
 }
