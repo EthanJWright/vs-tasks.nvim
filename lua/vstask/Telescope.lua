@@ -146,6 +146,15 @@ local function tasks(opts)
                 command = string.format("%s && %s", cd_command, command)
             end
         end
+
+        local args = task_list[selection.index]["args"]
+        if nil ~= args then
+            for _, arg in ipairs(args) do
+                command = string.format("%s %s", command, arg)
+                print("COMMNAD %s", command)
+            end
+        end
+
         command = Parse.replace(command)
         process_command(command, 'current', Term_opts)
       end
