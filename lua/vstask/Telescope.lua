@@ -138,6 +138,14 @@ local function tasks(opts)
         actions.close(prompt_bufnr)
 
         local command = task_list[selection.index]["command"]
+        local options = task_list[selection.index]["options"]
+        if nil ~= options then
+            local cwd = options["cwd"]
+            if nil ~= cwd then
+                local cd_command = string.format("cd %s", cwd)
+                command = string.format("%s && %s", cd_command, command)
+            end
+        end
         command = Parse.replace(command)
         process_command(command, 'current', Term_opts)
       end
