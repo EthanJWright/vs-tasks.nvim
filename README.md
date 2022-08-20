@@ -13,7 +13,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 
 Short Demo
 
-![](./demos/example.gif)
+![Short Demo](https://imgur.com/a/Y2WXH5r)
 
 ## Setup and usage
 
