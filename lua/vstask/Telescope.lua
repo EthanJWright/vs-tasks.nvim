@@ -25,6 +25,7 @@ local function set_history(label, command, options)
   else
     command_history[label].hits = command_history[label].hits + 1
   end
+  Parse.Used_cmd(label)
 end
 
 local last_cmd = nil

@@ -40,7 +40,33 @@ local function get_inputs()
   return Inputs
 end
 
+local cached = nil
 local function get_tasks()
+  if cached ~= nil then
+    -- create task table sorted by hits
+    local tasks_with_hits = {}
+    local other_tasks = {}
+    for _, task in pairs(cached) do
+      if (task.hits > 0) then
+        table.insert(tasks_with_hits, task)
+      else
+        table.insert(other_tasks, task)
+      end
+    end
+    -- return tasks in order of most used
+    table.sort(tasks_with_hits, function(a, b)
+      return a.hits > b.hits
+    end)
+    local formatted = {}
+    for _, task in pairs(tasks_with_hits) do
+      table.insert(formatted, task.task)
+    end
+    for _, task in pairs(other_tasks) do
+      table.insert(formatted, task.task)
+    end
+    return formatted
+  end
+
   local path = vim.fn.getcwd() .."/.vscode/tasks.json"
   if not file_exists(path) then
     vim.notify(MISSING_FILE_MESSAGE, "error")
@@ -49,7 +75,22 @@ local function get_tasks()
   get_inputs()
   local tasks = Config.load_json(path)
   Tasks = tasks["tasks"]
+  -- add each task to cached while initializing 'hits' as 0
+  cached = {}
+  for _, task in pairs(Tasks) do
+    cached[task["label"]] = {task = task, hits = 0}
+  end
   return Tasks
+end
+
+local function used_cmd(label)
+  if cached == nil then
+    return
+  end
+  if cached[label] == nil then
+    return
+  end
+  cached[label]["hits"] = cached[label]["hits"] + 1
 end
 
 local function get_predefined_function(getvar, predefined)
@@ -147,4 +188,5 @@ return {
   Inputs = get_inputs,
   Tasks = get_tasks,
   Set = load_input_variable,
+  Used_cmd = used_cmd,
 }
