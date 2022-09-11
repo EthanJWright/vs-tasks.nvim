@@ -13,11 +13,18 @@ local Mappings = {
   current = '<CR>'
 }
 
+local last_cmd = nil
 local Term_opts = {}
 
 local function set_term_opts(new_opts)
     Term_opts= new_opts
 end
+
+local function get_last()
+  return last_cmd
+end
+
+
 
 local function set_mappings(new_mappings)
   if new_mappings.vertical ~= nil then
@@ -36,6 +43,7 @@ end
 
 
 local process_command = function(command, direction, opts)
+  last_cmd = command
   if Command_handler ~= nil then
     Command_handler(command, direction, opts)
   else
@@ -197,5 +205,6 @@ return {
   Inputs = inputs,
   Set_command_handler = set_command_handler,
   Set_mappings = set_mappings,
-  Set_term_opts = set_term_opts
+  Set_term_opts = set_term_opts,
+  Get_last = get_last,
 }

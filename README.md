@@ -141,6 +141,21 @@ You can also configure themes and pass options to the picker
 lua require("telescope").extensions.vstask.tasks(require('telescope.themes').get_dropdown()) -- open task list in telescope
 ```
 
+You can also grab the last run task and do what you want with it, such as open
+it in a new terminal:
+
+```lua
+function _RUN_LAST_TASK()
+  local vstask_ok, vstask = pcall(require, "vstask")
+  if not vstask_ok then
+    return
+  end
+  local cmd = vstask.get_last()
+  vim.cmd("vsplit")
+  vim.cmd("term " .. cmd)
+end
+```
+
 ## Features to implement
 
 ### Full VS Code variable support
