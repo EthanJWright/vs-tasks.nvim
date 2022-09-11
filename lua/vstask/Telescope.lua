@@ -13,6 +13,20 @@ local Mappings = {
   current = '<CR>'
 }
 
+local command_history = {}
+local function set_history(label, command, options)
+  if not command_history[label] then
+    command_history[label] = {
+      command = command,
+      options = options,
+      label = label,
+      hits = 1
+    }
+  else
+    command_history[label].hits = command_history[label].hits + 1
+  end
+end
+
 local last_cmd = nil
 local Term_opts = {}
 
@@ -24,6 +38,22 @@ local function get_last()
   return last_cmd
 end
 
+local function format_command(pre, options)
+  local command = pre
+  if nil ~= options then
+      local cwd = options["cwd"]
+      if nil ~= cwd then
+          local cd_command = string.format("cd %s", cwd)
+          command = string.format("%s && %s", cd_command, command)
+      end
+  end
+  command = Parse.replace(command)
+  return {
+    pre = pre,
+    command = command,
+    options = options
+  }
+end
 
 
 local function set_mappings(new_mappings)
@@ -117,6 +147,69 @@ local function inputs(opts)
   }):find()
 end
 
+local function start_task_direction(direction, promp_bufnr, map, selection_list)
+  local selection = state.get_selected_entry(promp_bufnr)
+  actions.close(promp_bufnr)
+
+  local command = selection_list[selection.index]["command"]
+  local options = selection_list[selection.index]["options"]
+  local label = selection_list[selection.index]["label"]
+  set_history(label, command, options)
+  local formatted_command = format_command(command, options)
+  process_command(formatted_command['command'], direction, Term_opts)
+end
+
+local function history(opts)
+  if vim.tbl_isempty(command_history) then
+    return
+  end
+  -- sort command history by hits
+  local sorted_history = {}
+  for _, command in pairs(command_history) do
+    table.insert(sorted_history, command)
+  end
+  table.sort(sorted_history, function(a, b) return a.hits > b.hits end)
+
+  -- build label table
+  local  labels = {}
+  for i = 1, #sorted_history do
+    local current_task = sorted_history[i]["label"]
+    table.insert(labels, current_task)
+  end
+
+
+  pickers.new(opts, {
+    prompt_title = 'History',
+    finder    = finders.new_table {
+      results = labels
+    },
+    sorter = sorters.get_generic_fuzzy_sorter(),
+    attach_mappings = function(prompt_bufnr, map)
+      local function start_task()
+        start_task_direction('current', prompt_bufnr, map, sorted_history)
+      end
+      local function start_task_vertical()
+        start_task_direction('vertical', prompt_bufnr, map, sorted_history)
+      end
+      local function start_task_split()
+        start_task_direction('horizontal', prompt_bufnr, map, sorted_history)
+      end
+      local function start_task_tab()
+        start_task_direction('tab', prompt_bufnr, map, sorted_history)
+      end
+      map('i', Mappings.current, start_task)
+      map('n', Mappings.current, start_task)
+      map('i', Mappings.vertical, start_task_vertical)
+      map('n', Mappings.vertical, start_task_vertical)
+      map('i', Mappings.split, start_task_split)
+      map('n', Mappings.split, start_task_split)
+      map('i', Mappings.tab, start_task_tab)
+      map('n', Mappings.tab, start_task_tab)
+      return true
+    end
+  }):find()
+end
+
 local function tasks(opts)
   opts = opts or {}
 
@@ -142,48 +235,21 @@ local function tasks(opts)
     attach_mappings = function(prompt_bufnr, map)
 
       local start_task = function()
-        local selection = state.get_selected_entry(prompt_bufnr)
-        actions.close(prompt_bufnr)
-
-        local command = task_list[selection.index]["command"]
-        local options = task_list[selection.index]["options"]
-        if nil ~= options then
-            local cwd = options["cwd"]
-            if nil ~= cwd then
-                local cd_command = string.format("cd %s", cwd)
-                command = string.format("%s && %s", cd_command, command)
-            end
-        end
-        command = Parse.replace(command)
-        process_command(command, 'current', Term_opts)
+        start_task_direction('current', prompt_bufnr, map, task_list)
       end
 
       local start_in_vert = function()
-        local selection = state.get_selected_entry(prompt_bufnr)
-        actions.close(prompt_bufnr)
-        local command = task_list[selection.index]["command"]
-        command = Parse.replace(command)
-        process_command(command, 'vertical', Term_opts)
+        start_task_direction('vertical', prompt_bufnr, map, task_list)
         vim.cmd('normal! G')
       end
 
       local start_in_split = function()
-        local selection = state.get_selected_entry(prompt_bufnr)
-        actions.close(prompt_bufnr)
-
-        local command = task_list[selection.index]["command"]
-        command = Parse.replace(command)
-        process_command(command, 'horizontal', Term_opts)
+        start_task_direction('horizontal', prompt_bufnr, map, task_list)
         vim.cmd('normal! G')
       end
 
       local start_in_tab = function()
-        local selection = state.get_selected_entry(prompt_bufnr)
-        actions.close(prompt_bufnr)
-
-        local command = task_list[selection.index]["command"]
-        command = Parse.replace(command)
-        process_command(command, 'tab', Term_opts)
+        start_task_direction('tab', prompt_bufnr, map, task_list)
         vim.cmd('normal! G')
       end
 
@@ -203,6 +269,7 @@ end
 return {
   Tasks = tasks,
   Inputs = inputs,
+  History = history,
   Set_command_handler = set_command_handler,
   Set_mappings = set_mappings,
   Set_term_opts = set_term_opts,

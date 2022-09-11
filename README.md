@@ -8,6 +8,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
     - run tasks in a horizontal or vertical split terminal
 - ✏️  edit input variables that will be used for the session
 - Use VS Code's [variables](https://code.visualstudio.com/docs/editor/variables-reference) in the command (limited support, see desired features)
+- ⟳ Run tasks from your history, sorted by most used
 
 ## Example
 
@@ -45,6 +46,7 @@ Set up keybindings:
 nnoremap <Leader>ta :lua require("telescope").extensions.vstask.tasks()<CR>
 nnoremap <Leader>ti :lua require("telescope").extensions.vstask.inputs()<CR>
 nnoremap <Leader>tt :lua require("telescope").extensions.vstask.close()<CR>
+nnoremap <Leader>th :lua require("telescope").extensions.vstask.history()<CR>
 ```
 *Note:* When the task telescope is open:
   - Enter will open in toggleterm
@@ -132,6 +134,7 @@ In your project root set up `.vscode/tasks.json`
 ```lua
 lua require("telescope").extensions.vstask.tasks() -- open task list in telescope
 lua require("telescope").extensions.vstask.inputs() -- open the input list, set new input
+lua require("telescope").extensions.vstask.history() -- search history of tasks
 lua require("telescope").extensions.vstask.close() -- close the task runner (if toggleterm)
 ```
 
