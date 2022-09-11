@@ -179,7 +179,7 @@ local function history(opts)
 
 
   pickers.new(opts, {
-    prompt_title = 'History',
+    prompt_title = 'Task History',
     finder    = finders.new_table {
       results = labels
     },
