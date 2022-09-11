@@ -45,7 +45,6 @@ Set up keybindings:
 ```vim
 nnoremap <Leader>ta :lua require("telescope").extensions.vstask.tasks()<CR>
 nnoremap <Leader>ti :lua require("telescope").extensions.vstask.inputs()<CR>
-nnoremap <Leader>tt :lua require("telescope").extensions.vstask.close()<CR>
 nnoremap <Leader>th :lua require("telescope").extensions.vstask.history()<CR>
 ```
 *Note:* When the task telescope is open:
