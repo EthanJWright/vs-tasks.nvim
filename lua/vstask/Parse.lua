@@ -79,11 +79,11 @@ local function cache_scheme(cache_list, fn)
 end
 
 local function manage_cache(cache_list, scheme)
-  if (scheme == nil or scheme == "most") then
-    return cache_scheme(cache_list, hit_sorter)
-  end
-  if (scheme == "last") then
+  if (scheme == nil or scheme == "last") then
     return cache_scheme(cache_list, time_sorter)
+  end
+  if (scheme == "most") then
+    return cache_scheme(cache_list, hit_sorter)
   end
 end
 
