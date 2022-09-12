@@ -7,6 +7,9 @@ M.Parse = require("vstask.Parse")
 
 
 function M.setup(opts)
+  if opts == nil then
+    return
+  end
   if opts.use_harpoon ~= nil and opts.use_harpoon == true then
     M.Telescope.Set_command_handler(require("vstask.Harpoon").Process)
   elseif opts.terminal ~= nil and opts.terminal == "toggleterm" then
