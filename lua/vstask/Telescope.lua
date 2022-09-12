@@ -25,7 +25,7 @@ local function set_history(label, command, options)
   else
     command_history[label].hits = command_history[label].hits + 1
   end
-  Parse.Used_cmd(label)
+  Parse.Used_task(label)
 end
 
 local last_cmd = nil
@@ -92,7 +92,6 @@ local process_command = function(command, direction, opts)
         vim.cmd(command_map[opt_direction].size .. size)
       end
     end
-
     vim.cmd('terminal ' .. command)
   end
 end
@@ -146,6 +145,21 @@ local function inputs(opts)
       return true
     end
   }):find()
+end
+
+local function start_launch_direction(direction, prompt_bufnr, map, selection_list)
+  local selection = state.get_selected_entry(prompt_bufnr)
+  actions.close(prompt_bufnr)
+
+  local command = selection_list[selection.index]["program"]
+  local options = selection_list[selection.index]["options"]
+  local label = selection_list[selection.index]["name"]
+  local args = selection_list[selection.index]["args"]
+
+  Parse.Used_launch(label)
+  local formatted_command = format_command(command, options)
+  local built = Parse.Build_launch(formatted_command.command, args)
+  process_command(built, direction, Term_opts)
 end
 
 local function start_task_direction(direction, promp_bufnr, map, selection_list)
@@ -267,7 +281,64 @@ local function tasks(opts)
   }):find()
 end
 
+local function launches(opts)
+  opts = opts or {}
+
+  local launch_list = Parse.Launches()
+
+  if vim.tbl_isempty(launch_list) then
+    return
+  end
+
+  local  launch_formatted = {}
+
+  for i = 1, #launch_list do
+    local current_launch = launch_list[i]["name"]
+    table.insert(launch_formatted, current_launch)
+  end
+
+  pickers.new(opts, {
+    prompt_title = 'Launches',
+    finder    = finders.new_table {
+      results = launch_formatted
+    },
+    sorter = sorters.get_generic_fuzzy_sorter(),
+    attach_mappings = function(prompt_bufnr, map)
+
+      local start_task = function()
+        start_launch_direction('current', prompt_bufnr, map, launch_list)
+      end
+
+      local start_in_vert = function()
+        start_launch_direction('vertical', prompt_bufnr, map, launch_list)
+        vim.cmd('normal! G')
+      end
+
+      local start_in_split = function()
+        start_launch_direction('horizontal', prompt_bufnr, map, launch_list)
+        vim.cmd('normal! G')
+      end
+
+      local start_in_tab = function()
+        start_launch_direction('tab', prompt_bufnr, map, launch_list)
+        vim.cmd('normal! G')
+      end
+
+      map('i', Mappings.current, start_task)
+      map('n', Mappings.current, start_task)
+      map('i', Mappings.vertical, start_in_vert)
+      map('n', Mappings.vertical, start_in_vert)
+      map('i', Mappings.split, start_in_split)
+      map('n', Mappings.split, start_in_split)
+      map('i', Mappings.tab, start_in_tab)
+      map('n', Mappings.tab, start_in_tab)
+      return true
+    end
+  }):find()
+end
+
 return {
+  Launch = launches,
   Tasks = tasks,
   Inputs = inputs,
   History = history,

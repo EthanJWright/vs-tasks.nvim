@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Say JOJO name",
+      "request": "launch",
+      "type": "shell",
+      "program": "echo",
+      "args": [
+        "私は",
+        "Giorno",
+        "Giovanna"
+      ]
+    },
+    {
+      "name": "Hello World",
+      "request": "launch",
+      "type": "shell",
+      "program": "echo",
+      "args": [
+        "Hello, World!"
+      ]
+    }
+  ]
+}
