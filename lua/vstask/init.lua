@@ -18,6 +18,9 @@ function M.setup(opts)
   if opts.term_opts ~= nil then
     M.Telescope.Set_term_opts(opts.term_opts)
   end
+  if opts.cache_strategy ~= nil then
+    M.Parse.Cache_strategy(opts.cache_strategy)
+  end
 end
 
 M.get_last = M.Telescope.Get_last
