@@ -64,6 +64,7 @@ nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
 ```vim
 lua <<EOF
 require("vstask").setup({
+  cache_strategy = "last", -- can be "most" or "last" (most used / last used)
   use_harpoon = true, -- use harpoon to auto cache terminals
   telescope_keys = { -- change the telescope bindings used to launch tasks
       vertical = '<C-v>',
