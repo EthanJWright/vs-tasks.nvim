@@ -5,6 +5,7 @@ return require('telescope').register_extension {
     tasks = Telescope.Tasks,
     inputs = Telescope.Inputs,
     history = Telescope.History,
+    launch = Telescope.Launch,
     close = Telescope.Close,
   }
 }
