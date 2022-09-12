@@ -4,6 +4,11 @@ local Predefined = require('vstask.Predefined')
 
 local MISSING_FILE_MESSAGE = "tasks.json file could not be found."
 
+local CACHE_STRATEGY = nil
+local set_cache_strategy = function(strategy)
+  CACHE_STRATEGY = strategy
+end
+
 local function file_exists(name)
   local f = io.open(name, "r")
   if f ~= nil then
@@ -40,31 +45,73 @@ local function get_inputs()
   return Inputs
 end
 
-local cached = nil
+local task_cache = nil
+local launch_cache = nil
+
+local function hit_sorter(a, b)
+  return a.hits > b.hits
+end
+
+local function time_sorter(a, b)
+  return a.timestamp > b.timestamp
+end
+
+local function cache_scheme(cache_list, fn)
+  local tasks_with_hits = {}
+  local other_tasks = {}
+  for _, task in pairs(cache_list) do
+    if (task.hits > 0) then
+      table.insert(tasks_with_hits, task)
+    else
+      table.insert(other_tasks, task)
+    end
+  end
+  -- return tasks in order of most used
+  table.sort(tasks_with_hits, fn)
+  local formatted = {}
+  for _, task in pairs(tasks_with_hits) do
+    table.insert(formatted, task.entry)
+  end
+  for _, task in pairs(other_tasks) do
+    table.insert(formatted, task.entry)
+  end
+  return formatted
+end
+
+local function manage_cache(cache_list, scheme)
+  if (scheme == nil or scheme == "most") then
+    return cache_scheme(cache_list, hit_sorter)
+  end
+  if (scheme == "last") then
+    return cache_scheme(cache_list, time_sorter)
+  end
+end
+
+local function create_cache(raw_list, key)
+  local new_cache = {}
+  for _, entry in pairs(raw_list) do
+    local cache_key = entry[key]
+    new_cache[cache_key] = {entry = entry, hits = 0, timestamp = os.time()}
+  end
+  return new_cache
+end
+
+local function update_cache(cache, key)
+  if cache == nil then
+    return
+  end
+  if cache[key] == nil then
+    return
+  end
+  if (cache[key] ~= nil) then
+    cache[key].hits = cache[key].hits + 1
+    cache[key].timestamp = os.time()
+  end
+end
+
 local function get_tasks()
-  if cached ~= nil then
-    -- create task table sorted by hits
-    local tasks_with_hits = {}
-    local other_tasks = {}
-    for _, task in pairs(cached) do
-      if (task.hits > 0) then
-        table.insert(tasks_with_hits, task)
-      else
-        table.insert(other_tasks, task)
-      end
-    end
-    -- return tasks in order of most used
-    table.sort(tasks_with_hits, function(a, b)
-      return a.hits > b.hits
-    end)
-    local formatted = {}
-    for _, task in pairs(tasks_with_hits) do
-      table.insert(formatted, task.task)
-    end
-    for _, task in pairs(other_tasks) do
-      table.insert(formatted, task.task)
-    end
-    return formatted
+  if task_cache ~= nil then
+    return manage_cache(task_cache, CACHE_STRATEGY)
   end
 
   local path = vim.fn.getcwd() .."/.vscode/tasks.json"
@@ -76,21 +123,16 @@ local function get_tasks()
   local tasks = Config.load_json(path)
   Tasks = tasks["tasks"]
   -- add each task to cached while initializing 'hits' as 0
-  cached = {}
-  for _, task in pairs(Tasks) do
-    cached[task["label"]] = {task = task, hits = 0}
-  end
+  task_cache = create_cache(Tasks, "label")
   return Tasks
 end
 
-local function used_cmd(label)
-  if cached == nil then
-    return
-  end
-  if cached[label] == nil then
-    return
-  end
-  cached[label]["hits"] = cached[label]["hits"] + 1
+local function used_task(label)
+  update_cache(task_cache, label)
+end
+
+local function used_launch(name)
+  update_cache(launch_cache, name)
 end
 
 local function get_predefined_function(getvar, predefined)
@@ -183,10 +225,38 @@ local function replace_vars_in_command(command)
   return command
 end
 
+local function build_launch(program, args)
+  local command = program
+  for _, arg in pairs(args) do
+    command = command .. " " .. arg
+  end
+  return command
+end
+
+local function get_launches()
+  if launch_cache ~= nil then
+    return manage_cache(launch_cache, CACHE_STRATEGY)
+  end
+  local path = vim.fn.getcwd() .."/.vscode/launch.json"
+  if not file_exists(path) then
+    vim.notify(MISSING_FILE_MESSAGE, "error")
+    return {}
+  end
+  get_inputs()
+  local configurations = Config.load_json(path)
+  Launches = configurations["configurations"]
+  launch_cache = create_cache(Launches, "name")
+  return Launches
+end
+
 return {
   replace = replace_vars_in_command,
   Inputs = get_inputs,
   Tasks = get_tasks,
+  Launches = get_launches,
   Set = load_input_variable,
-  Used_cmd = used_cmd,
+  Used_task = used_task,
+  Used_launch = used_launch,
+  Build_launch = build_launch,
+  Cache_strategy = set_cache_strategy,
 }
