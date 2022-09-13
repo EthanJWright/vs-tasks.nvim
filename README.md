@@ -55,6 +55,11 @@ nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
   - Ctrl-v will open in a vertical split terminal
   - Ctrl-p will open in a split terminal
 
+### Autodetect
+
+VS Tasks can auto detect certain scripts from your package, such as npm
+scripts.
+
 ## Configuration
 
 - Configure harpoon use (auto cache terminals based on task)
@@ -71,6 +76,9 @@ require("vstask").setup({
       split = '<C-p>',
       tab = '<C-t>',
       current = '<CR>',
+  },
+  autodetect = { -- auto load scripts
+    npm = "on"
   },
   terminal = 'toggleterm',
   term_opts = {

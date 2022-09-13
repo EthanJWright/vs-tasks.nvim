@@ -24,6 +24,9 @@ function M.setup(opts)
   if opts.cache_strategy ~= nil then
     M.Parse.Cache_strategy(opts.cache_strategy)
   end
+  if opts.autodetect ~= nil then
+    M.Parse.Set_autodetect(opts.autodetect)
+  end
 end
 
 M.get_last = M.Telescope.Get_last

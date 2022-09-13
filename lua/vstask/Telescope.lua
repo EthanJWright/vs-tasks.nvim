@@ -147,7 +147,7 @@ local function inputs(opts)
   }):find()
 end
 
-local function start_launch_direction(direction, prompt_bufnr, map, selection_list)
+local function start_launch_direction(direction, prompt_bufnr, _, selection_list)
   local selection = state.get_selected_entry(prompt_bufnr)
   actions.close(prompt_bufnr)
 
@@ -162,7 +162,7 @@ local function start_launch_direction(direction, prompt_bufnr, map, selection_li
   process_command(built, direction, Term_opts)
 end
 
-local function start_task_direction(direction, promp_bufnr, map, selection_list)
+local function start_task_direction(direction, promp_bufnr, _, selection_list)
   local selection = state.get_selected_entry(promp_bufnr)
   actions.close(promp_bufnr)
 

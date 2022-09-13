@@ -2,6 +2,19 @@ local Inputs = {}
 local Config = require("vstask.Config")
 local Predefined = require('vstask.Predefined')
 
+local auto_detect = {
+  npm = "on"
+}
+
+local function set_autodetect(autodetect)
+  if autodetect == nil then
+    return
+  end
+  if autodetect.npm == "on" or autodetect.npm == "off" then
+    auto_detect.npm = autodetect.npm
+  end
+end
+
 local MISSING_FILE_MESSAGE = "tasks.json file could not be found."
 
 local CACHE_STRATEGY = nil
@@ -109,19 +122,50 @@ local function update_cache(cache, key)
   end
 end
 
+local function auto_detect_npm()
+  if auto_detect.npm == "off" then
+    return {}
+  end
+  local cwd = vim.fn.getcwd()
+  local packagejson = cwd .."/package.json"
+  local script_tasks = {}
+
+  if not file_exists(packagejson) then
+    return script_tasks
+  end
+
+  local config = Config.load_json(packagejson)
+  if (setContains(config, "scripts")) then
+    local scripts = config["scripts"]
+    for key in pairs(scripts) do
+      local label = "npm: " .. key
+      table.insert(script_tasks, {label = label, type = "npm", command = 'npm run ' .. key})
+    end
+  end
+  return script_tasks
+end
+
 local function get_tasks()
   if task_cache ~= nil then
     return manage_cache(task_cache, CACHE_STRATEGY)
   end
 
-  local path = vim.fn.getcwd() .."/.vscode/tasks.json"
+  local cwd = vim.fn.getcwd()
+  local path = cwd .."/.vscode/tasks.json"
   if not file_exists(path) then
     vim.notify(MISSING_FILE_MESSAGE, "error")
     return {}
   end
+
+
   get_inputs()
   local tasks = Config.load_json(path)
   Tasks = tasks["tasks"]
+  -- add script_tasks to Tasks
+  local script_tasks = auto_detect_npm()
+  for _, task in pairs(script_tasks) do
+    table.insert(Tasks, task)
+  end
   -- add each task to cached while initializing 'hits' as 0
   task_cache = create_cache(Tasks, "label")
   return Tasks
@@ -259,4 +303,5 @@ return {
   Used_launch = used_launch,
   Build_launch = build_launch,
   Cache_strategy = set_cache_strategy,
+  Set_autodetect = set_autodetect,
 }
