@@ -65,10 +65,14 @@ scripts.
 - Configure harpoon use (auto cache terminals based on task)
 - Configure toggle term use
 - Configure terminal behavior
+- Cache json conf sets whether the config will be ran every time. If the cache
+    is removed, this will also remove cache features such as remembering last
+    ran command
 
 ```vim
 lua <<EOF
 require("vstask").setup({
+  cache_json_conf = true, -- don't read the json conf every time a task is ran
   cache_strategy = "last", -- can be "most" or "last" (most used / last used)
   use_harpoon = true, -- use harpoon to auto cache terminals
   telescope_keys = { -- change the telescope bindings used to launch tasks

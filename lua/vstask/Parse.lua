@@ -2,6 +2,12 @@ local Inputs = {}
 local Config = require("vstask.Config")
 local Predefined = require('vstask.Predefined')
 
+local cache_json_conf = true
+
+local function set_cache_json_conf(value)
+  cache_json_conf = value
+end
+
 local auto_detect = {
   npm = "on"
 }
@@ -146,7 +152,7 @@ local function auto_detect_npm()
 end
 
 local function get_tasks()
-  if task_cache ~= nil then
+  if task_cache ~= nil and cache_json_conf then
     return manage_cache(task_cache, CACHE_STRATEGY)
   end
 
@@ -304,4 +310,5 @@ return {
   Build_launch = build_launch,
   Cache_strategy = set_cache_strategy,
   Set_autodetect = set_autodetect,
+Set_cache_json_conf = set_cache_json_conf
 }

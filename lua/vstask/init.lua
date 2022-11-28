@@ -27,6 +27,10 @@ function M.setup(opts)
   if opts.autodetect ~= nil then
     M.Parse.Set_autodetect(opts.autodetect)
   end
+
+  if opts.cache_json_conf ~= nil then
+    M.Parse.Set_cache_json_conf(opts.cache_json_conf)
+  end
 end
 
 M.get_last = M.Telescope.Get_last
