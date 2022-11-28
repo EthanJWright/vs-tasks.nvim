@@ -204,7 +204,7 @@ end
 local function get_input_variables(command)
   local input_variables = {}
   local count = 0
-  for w in string.gmatch(command, "%{input:(%a+)%}") do
+  for w in string.gmatch(command, "${input:([^}]*)}") do
     table.insert(input_variables, w)
     count = count + 1
   end
@@ -310,5 +310,5 @@ return {
   Build_launch = build_launch,
   Cache_strategy = set_cache_strategy,
   Set_autodetect = set_autodetect,
-Set_cache_json_conf = set_cache_json_conf
+  Set_cache_json_conf = set_cache_json_conf
 }
