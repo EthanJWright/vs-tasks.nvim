@@ -43,6 +43,9 @@ local function setContains(set, key)
 end
 
 local function get_inputs()
+  if Inputs ~= nil then
+    return Inputs
+  end
   local path = vim.fn.getcwd() .."/.vscode/tasks.json"
   if not file_exists(path) then
     vim.notify(MISSING_FILE_MESSAGE, "error")
@@ -50,6 +53,7 @@ local function get_inputs()
   end
   local config = Config.load_json(path)
   if (not setContains(config, "inputs")) then
+    Inputs = {}
     return Inputs
   end
   local inputs = config["inputs"]
@@ -191,6 +195,7 @@ local function get_predefined_function(getvar, predefined)
       return func
     end
   end
+  return nil
 end
 
 local function get_input_variable(getvar, inputs)
@@ -216,6 +221,9 @@ local function load_input_variable(input)
   if input_val == "clear" then
     Inputs[input]["value"] = nil
   else
+    if Inputs[input] == nil then
+      Inputs[input] = { "value", nil }
+    end
     Inputs[input]["value"] = input_val
   end
 end
