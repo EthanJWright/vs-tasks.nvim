@@ -1,31 +1,38 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "🐮 Cowsay",
-      "type": "shell",
-      "command": "echo ${input:phrase} | cowsay",
-      "problemMatcher": []
-    },
-    {
-      "label": "Relative File",
-      "type": "shell",
-      "command": "echo ${relativeFile} | cowsay",
-      "problemMatcher": []
-    },
-    {
-      "label": "Relative File Dirname",
-      "type": "shell",
-      "command": "echo ${relativeFileDirname} | cowsay",
-      "problemMatcher": []
-    }
-  ],
   "inputs": [
     {
-      "id": "phrase",
-      "description": "Some term",
       "default": "",
+      "description": "Some term",
+      "id": "phrase",
       "type": "promptString"
     }
-  ]
+  ],
+  "tasks": [
+    {
+      "command": "echo ${input:phrase} | cowsay",
+      "label": "🐮 Cowsay",
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
+      "command": "echo ${relativeFile} | cowsay",
+      "label": "Relative File",
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
+      "command": "echo ${relativeFileDirname} | cowsay",
+      "label": "Relative File Dirname",
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
+      "args": ["hello", "world"],
+      "command": "echo ",
+      "label": "Arg Hello World",
+      "problemMatcher": [],
+      "type": "shell"
+    }
+  ],
+  "version": "2.0.0"
 }

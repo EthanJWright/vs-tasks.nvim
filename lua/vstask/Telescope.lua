@@ -234,9 +234,23 @@ local function tasks(opts)
     return
   end
 
+  local tasks_with_args = {}
+  for _, task in pairs(task_list) do
+    if task["args"] ~= nil then
+      -- add arg list to task string with white space
+      local args = task["args"]
+      local arg_string = ""
+      for _, arg in pairs(args) do
+        arg_string = arg_string .. " " .. arg
+      end
+      task["command"] = task["command"] .. arg_string
+    end
+    table.insert(tasks_with_args, task)
+  end
+
   local  tasks_formatted = {}
 
-  for i = 1, #task_list do
+  for i = 1, #tasks_with_args do
     local current_task = task_list[i]["label"]
     table.insert(tasks_formatted, current_task)
   end

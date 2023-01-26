@@ -174,6 +174,7 @@ local function get_tasks()
   -- add script_tasks to Tasks
   local script_tasks = auto_detect_npm()
   for _, task in pairs(script_tasks) do
+    print(task)
     table.insert(Tasks, task)
   end
   -- add each task to cached while initializing 'hits' as 0
