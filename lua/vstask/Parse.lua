@@ -170,16 +170,15 @@ local function get_tasks()
 
   get_inputs()
   local tasks = Config.load_json(path)
-  Tasks = tasks["tasks"]
+  local task_list = tasks["tasks"]
   -- add script_tasks to Tasks
   local script_tasks = auto_detect_npm()
   for _, task in pairs(script_tasks) do
-    print(task)
-    table.insert(Tasks, task)
+    table.insert(task_list, task)
   end
   -- add each task to cached while initializing 'hits' as 0
-  task_cache = create_cache(Tasks, "label")
-  return Tasks
+  task_cache = create_cache(task_list, "label")
+  return task_list
 end
 
 local function used_task(label)
