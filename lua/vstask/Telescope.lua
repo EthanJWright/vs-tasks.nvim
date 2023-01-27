@@ -244,6 +244,7 @@ local function tasks(opts)
         arg_string = arg_string .. " " .. arg
       end
       task["command"] = task["command"] .. arg_string
+      task["args"] = nil
     end
     table.insert(tasks_with_args, task)
   end
