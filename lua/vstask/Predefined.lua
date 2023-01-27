@@ -132,7 +132,7 @@ local get_relative_file_dirname = function()
 end
 
 return {
-  [ "workspaceFolder" ] = vim.fn.cwd,
+  [ "workspaceFolder" ] = vim.fn.getcwd,
   [ "workspaceFolderBasename" ] = get_workspacefolder_basename,
   [ "file" ] = get_file,
   [ "fileWorkspaceFolder" ] = get_file_workspace_folder,
