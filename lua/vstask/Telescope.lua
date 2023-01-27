@@ -171,8 +171,10 @@ local function start_task_direction(direction, promp_bufnr, _, selection_list)
   local args = selection_list[selection.index]["args"]
   set_history(label, command, options)
   local formatted_command = format_command(command, options)
-  local built = Parse.Build_launch(formatted_command.command, args)
-  process_command(built, direction, Term_opts)
+  if(args ~= nil) then
+    formatted_command.command = Parse.Build_launch(formatted_command.command, args)
+  end
+  process_command(formatted_command.command, direction, Term_opts)
 end
 
 local function history(opts)

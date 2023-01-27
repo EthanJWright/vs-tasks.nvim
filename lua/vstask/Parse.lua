@@ -203,6 +203,8 @@ local function get_input_variable(getvar, inputs)
   for _, input_dict in pairs(inputs) do
     if input_dict["id"] == getvar then
       return input_dict["value"]
+    else
+      print("no match for: ".. input_dict["value"])
     end
   end
 end
@@ -226,6 +228,7 @@ local function load_input_variable(input)
       Inputs[input] = { "value", nil }
     end
     Inputs[input]["value"] = input_val
+    Inputs[input]["id"] = input
   end
 end
 
@@ -271,7 +274,8 @@ local function replace_vars_in_command(command)
   local input_vars, predefined_vars = extract_variables(command, get_inputs())
   for _, replacing in pairs(input_vars) do
     local replace_pattern = "${input:" .. replacing .. "}"
-    command = string.gsub(command, replace_pattern, get_input_variable(replacing, get_inputs()))
+    local replace = get_input_variable(replacing, get_inputs())
+    command = string.gsub(command, replace_pattern, replace)
   end
 
   for _, replacing in pairs(predefined_vars) do
