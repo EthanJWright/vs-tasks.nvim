@@ -155,7 +155,6 @@ local function start_launch_direction(direction, prompt_bufnr, _, selection_list
   local options = selection_list[selection.index]["options"]
   local label = selection_list[selection.index]["name"]
   local args = selection_list[selection.index]["args"]
-
   Parse.Used_launch(label)
   local formatted_command = format_command(command, options)
   local built = Parse.Build_launch(formatted_command.command, args)
@@ -169,9 +168,17 @@ local function start_task_direction(direction, promp_bufnr, _, selection_list)
   local command = selection_list[selection.index]["command"]
   local options = selection_list[selection.index]["options"]
   local label = selection_list[selection.index]["label"]
+  local args = selection_list[selection.index]["args"]
   set_history(label, command, options)
   local formatted_command = format_command(command, options)
-  process_command(formatted_command['command'], direction, Term_opts)
+  local command_with_args = formatted_command['command']
+  if args ~= nil then
+    -- add each arg to end of command separated by a space
+    for _, arg in pairs(args) do
+      command_with_args = command_with_args .. ' ' .. arg
+    end
+  end
+  process_command(command_with_args, direction, Term_opts)
 end
 
 local function history(opts)
@@ -234,23 +241,9 @@ local function tasks(opts)
     return
   end
 
-  local tasks_with_args = {}
-  for _, task in pairs(task_list) do
-    if task["args"] ~= nil then
-      -- add arg list to task string with white space
-      local args = task["args"]
-      local arg_string = ""
-      for _, arg in pairs(args) do
-        arg_string = arg_string .. " " .. arg
-      end
-      task["command"] = task["command"] .. arg_string
-    end
-    table.insert(tasks_with_args, task)
-  end
-
   local  tasks_formatted = {}
 
-  for i = 1, #tasks_with_args do
+  for i = 1, #task_list do
     local current_task = task_list[i]["label"]
     table.insert(tasks_formatted, current_task)
   end
