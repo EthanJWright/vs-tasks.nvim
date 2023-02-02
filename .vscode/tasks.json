@@ -32,6 +32,12 @@
       "label": "Arg Hello World",
       "problemMatcher": [],
       "type": "shell"
+    },
+    {"command": "echo background!", "label": "Background"},
+    {
+      "command": "echo running dependsOn",
+      "dependsOn":[  "Background" ],
+      "label": "With Background"
     }
   ],
   "version": "2.0.0"

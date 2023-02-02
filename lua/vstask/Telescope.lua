@@ -97,7 +97,14 @@ local process_command = function(command, direction, opts)
         vim.cmd(command_map[opt_direction].size .. size)
       end
     end
-    vim.cmd('terminal ' .. command)
+    -- vim.cmd('terminal ' .. command)
+    -- run command in new terminal
+    -- vim.cmd('terminal ' .. command)
+    local id = vim.fn.bufadd('term://' .. command)
+    print('current id: ' .. id)
+    --[[ if direction == 'background' then
+      vim.cmd('close')
+    end ]]
   end
 end
 
@@ -153,9 +160,8 @@ local function inputs(opts)
 end
 
 local function start_launch_direction(direction, prompt_bufnr, _, selection_list)
-  local selection = state.get_selected_entry(prompt_bufnr)
+  local  selection = state.get_selected_entry(prompt_bufnr)
   actions.close(prompt_bufnr)
-
   local command = selection_list[selection.index]["program"]
   local options = selection_list[selection.index]["options"]
   local label = selection_list[selection.index]["name"]
@@ -166,9 +172,26 @@ local function start_launch_direction(direction, prompt_bufnr, _, selection_list
   process_command(built, direction, Term_opts)
 end
 
-local function start_task_direction(direction, promp_bufnr, _, selection_list)
-  local selection = state.get_selected_entry(promp_bufnr)
-  actions.close(promp_bufnr)
+local function start_task_direction(direction, promp_bufnr, _, selection_list, selection_index)
+  local selection = {}
+  if selection_index == nil then
+    selection = state.get_selected_entry(promp_bufnr)
+    actions.close(promp_bufnr)
+  else
+    selection.index = selection_index
+  end
+
+  local dependsOn = selection_list[selection.index]["dependsOn"]
+  if dependsOn ~= nil then
+    for _, dependency in pairs(dependsOn) do
+      for index, task in pairs(selection_list) do
+        if task["label"] == dependency then
+          print('starting background task: ' .. task["label"])
+          start_task_direction('background', promp_bufnr, _, selection_list, index)
+        end
+      end
+    end
+  end
 
   local command = selection_list[selection.index]["command"]
   local options = selection_list[selection.index]["options"]
