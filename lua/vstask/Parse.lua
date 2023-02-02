@@ -56,6 +56,7 @@ local function get_inputs()
     Inputs = {}
     return Inputs
   end
+
   local inputs = config["inputs"]
   for _, input_dict in pairs(inputs) do
     if Inputs[input_dict["id"]] == nil then
@@ -270,10 +271,11 @@ local extract_variables = function(command, inputs)
 end
 
 local function replace_vars_in_command(command)
-  local input_vars, predefined_vars = extract_variables(command, get_inputs())
+  local inputs = get_inputs()
+  local input_vars, predefined_vars = extract_variables(command, inputs)
   for _, replacing in pairs(input_vars) do
     local replace_pattern = "${input:" .. replacing .. "}"
-    local replace = get_input_variable(replacing, get_inputs())
+    local replace = get_input_variable(replacing, inputs)
     command = string.gsub(command, replace_pattern, replace)
   end
 
