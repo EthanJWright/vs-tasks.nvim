@@ -39,10 +39,6 @@ local function get_last()
   return last_cmd
 end
 
-local function add_echo_command(command)
-  return string.format("bash -c 'echo \"%s\"' && %s", command, command)
-end
-
 local function format_command(pre, options)
   local command = pre
   if nil ~= options then
@@ -53,7 +49,6 @@ local function format_command(pre, options)
       end
   end
   command = Parse.replace(command)
-  command = add_echo_command(command)
   return {
     pre = pre,
     command = command,
@@ -97,7 +92,9 @@ local process_command = function(command, direction, opts)
         vim.cmd(command_map[opt_direction].size .. size)
       end
     end
-    vim.cmd('terminal ' .. command)
+    vim.cmd(
+      string.format('terminal echo "%s" && %s', command, command)
+    )
   end
 end
 
