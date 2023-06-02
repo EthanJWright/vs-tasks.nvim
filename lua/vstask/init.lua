@@ -27,7 +27,9 @@ function M.setup(opts)
   if opts.autodetect ~= nil then
     M.Parse.Set_autodetect(opts.autodetect)
   end
-
+  if opts.config_dir ~= nil then
+    M.Parse.Set_config_dir(opts.config_dir)
+  end
   if opts.cache_json_conf ~= nil then
     M.Parse.Set_cache_json_conf(opts.cache_json_conf)
   end

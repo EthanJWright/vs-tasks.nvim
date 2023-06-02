@@ -12,6 +12,14 @@ local auto_detect = {
   npm = "on"
 }
 
+local config_dir = ".vscode"
+
+local function set_config_dir(dirname)
+    if string.match(dirname, [[^[%w-\.]+$]]) ~= nil then
+        config_dir = dirname
+    end
+end
+
 local function set_autodetect(autodetect)
   if autodetect == nil then
     return
@@ -46,7 +54,7 @@ local function get_inputs()
   if Inputs ~= nil then
     return Inputs
   end
-  local path = vim.fn.getcwd() .."/.vscode/tasks.json"
+  local path = vim.fn.getcwd() .. "/" .. config_dir .. "/tasks.json"
   if not file_exists(path) then
     vim.notify(MISSING_FILE_MESSAGE, "error")
     return {}
@@ -162,7 +170,7 @@ local function get_tasks()
   end
 
   local cwd = vim.fn.getcwd()
-  local path = cwd .."/.vscode/tasks.json"
+  local path = cwd .. "/" .. config_dir .. "/tasks.json"
   if not file_exists(path) then
     vim.notify(MISSING_FILE_MESSAGE, "error")
     return {}
@@ -301,7 +309,7 @@ local function get_launches()
   if launch_cache ~= nil then
     return manage_cache(launch_cache, CACHE_STRATEGY)
   end
-  local path = vim.fn.getcwd() .."/.vscode/launch.json"
+  local path = vim.fn.getcwd() .. "/" .. config_dir .. "/launch.json"
   if not file_exists(path) then
     vim.notify(MISSING_FILE_MESSAGE, "error")
     return {}
@@ -324,5 +332,6 @@ return {
   Build_launch = build_launch,
   Cache_strategy = set_cache_strategy,
   Set_autodetect = set_autodetect,
-  Set_cache_json_conf = set_cache_json_conf
+  Set_cache_json_conf = set_cache_json_conf,
+  Set_config_dir = set_config_dir
 }
