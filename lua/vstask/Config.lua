@@ -3,7 +3,9 @@
 ---@param data string Data to decode
 ---@returns table json_obj Decoded JSON object
 local json_decode = function(data)
-  local ok, result = pcall(require('json5').parse, vim.fn.readfile(data))
+  local lines = vim.fn.readfile(data)
+  local inputstr = table.concat(lines, '\n')
+  local ok, result = pcall(require('json5').parse, inputstr)
   if ok then
     return result
   else
