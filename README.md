@@ -1,3 +1,12 @@
+# Info on Fork
+
+This fork was created to be able to parse json5. It is a quick and dirty solution that works for me. I'll clean it up and make it easy to use when others show interest. 
+
+
+Below is the original README.md:
+
+---------------
+
 # VS Tasks
 
 Telescope plugin to load and run tasks in a project that conform to VS Code's [Editor Tasks](https://code.visualstudio.com/docs/editor/tasks)
