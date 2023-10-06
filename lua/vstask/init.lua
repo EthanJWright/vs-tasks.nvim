@@ -33,6 +33,9 @@ function M.setup(opts)
   if opts.cache_json_conf ~= nil then
     M.Parse.Set_cache_json_conf(opts.cache_json_conf)
   end
+  if opts.json_parser ~= nil then
+    M.Parse.Set_json_parser(opts.json_parser)
+  end
 end
 
 M.get_last = M.Telescope.Get_last

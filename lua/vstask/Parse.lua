@@ -36,6 +36,13 @@ local set_cache_strategy = function(strategy)
   CACHE_STRATEGY = strategy
 end
 
+local JSON_PARSER
+--- Set JSON Parser
+---@param json_parser function that takes inputstr
+local set_json_parser = function(json_parser)
+  JSON_PARSER = json_parser
+end
+
 local function file_exists(name)
   local f = io.open(name, "r")
   if f ~= nil then
@@ -59,7 +66,7 @@ local function get_inputs()
     vim.notify(MISSING_FILE_MESSAGE, "error")
     return {}
   end
-  local config = Config.load_json(path)
+  local config = Config.load_json(path, JSON_PARSER)
   if (not setContains(config, "inputs")) then
     Inputs = {}
     return Inputs
@@ -153,7 +160,7 @@ local function auto_detect_npm()
     return script_tasks
   end
 
-  local config = Config.load_json(packagejson)
+  local config = Config.load_json(packagejson, JSON_PARSER)
   if (setContains(config, "scripts")) then
     local scripts = config["scripts"]
     for key in pairs(scripts) do
@@ -178,7 +185,7 @@ local function get_tasks()
 
 
   get_inputs()
-  local tasks = Config.load_json(path)
+  local tasks = Config.load_json(path, JSON_PARSER)
   local task_list = tasks["tasks"]
   -- add script_tasks to Tasks
   local script_tasks = auto_detect_npm()
@@ -315,7 +322,7 @@ local function get_launches()
     return {}
   end
   get_inputs()
-  local configurations = Config.load_json(path)
+  local configurations = Config.load_json(path, JSON_PARSER)
   Launches = configurations["configurations"]
   launch_cache = create_cache(Launches, "name")
   return Launches
@@ -333,5 +340,6 @@ return {
   Cache_strategy = set_cache_strategy,
   Set_autodetect = set_autodetect,
   Set_cache_json_conf = set_cache_json_conf,
-  Set_config_dir = set_config_dir
+  Set_config_dir = set_config_dir,
+  Set_json_parser = set_json_parser
 }
