@@ -110,10 +110,40 @@ require("vstask").setup({
     tab = {
       direction = 'tab',
     }
-  }
+  },
+  json_parser = 'vim.fn.json_decode'
 })
 EOF
 ```
+
+### Work with json5 files
+
+VS Code uses json5 which allows use of comments and trailing commas.
+If you want to use the same tasks as your teammates, and they leave trailing commas and comments in the project's task.json,
+you will need another parser than the default `vim.fn.json_decode`.
+
+A proposed solution: 
+Add the following to your dependencies.
+
+```lua
+lua <<EOF
+    {
+      'Joakker/lua-json5',
+      run = './install.sh'
+    }
+EOF
+```
+
+And add the following option in the setup: 
+
+```lua
+lua <<EOF
+require("vstask").setup({
+    json_parser = require('json5').parse
+})
+EOF
+```
+
 
 ## Example
 
