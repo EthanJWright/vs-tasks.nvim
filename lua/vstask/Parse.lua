@@ -130,7 +130,9 @@ local function create_cache(raw_list, key)
   local new_cache = {}
   for _, entry in pairs(raw_list) do
     local cache_key = entry[key]
-    new_cache[cache_key] = {entry = entry, hits = 0, timestamp = os.time()}
+    if cache_key then
+      new_cache[cache_key] = {entry = entry, hits = 0, timestamp = os.time()}
+    end
   end
   return new_cache
 end
