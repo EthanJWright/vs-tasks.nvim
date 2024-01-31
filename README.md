@@ -5,8 +5,8 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 ## Features
 
 - ⚙ Run tasks with [Toggleterm](https://github.com/akinsho/nvim-toggleterm.lua)
-    - run tasks in a horizontal or vertical split terminal
-- ✏️  edit input variables that will be used for the session
+  - run tasks in a horizontal or vertical split terminal
+- ✏️ edit input variables that will be used for the session
 - Use VS Code's [variables](https://code.visualstudio.com/docs/editor/variables-reference) in the command (limited support, see desired features)
 - Use VS Code's [launch.json](https://code.visualstudio.com/docs/editor/debugging#_launch-configurations) pattern (limited support)
 - ⟳ Run tasks from your history, sorted by most used
@@ -42,6 +42,7 @@ use {
 ```
 
 With Lazy:
+
 ```lua
 {
   "EthanJWright/vs-tasks.nvim",
@@ -62,10 +63,11 @@ nnoremap <Leader>th :lua require("telescope").extensions.vstask.history()<CR>
 nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
 ```
 
-*Note:* When the task telescope is open:
-  - Enter will open in toggleterm
-  - Ctrl-v will open in a vertical split terminal
-  - Ctrl-p will open in a split terminal
+_Note:_ When the task telescope is open:
+
+- Enter will open in toggleterm
+- Ctrl-v will open in a vertical split terminal
+- Ctrl-p will open in a split terminal
 
 ### Autodetect
 
@@ -78,8 +80,8 @@ scripts.
 - Configure toggle term use
 - Configure terminal behavior
 - Cache json conf sets whether the config will be ran every time. If the cache
-    is removed, this will also remove cache features such as remembering last
-    ran command
+  is removed, this will also remove cache features such as remembering last
+  ran command
 
 ```lua
 lua <<EOF
@@ -114,7 +116,7 @@ require("vstask").setup({
       direction = 'tab',
     }
   },
-  json_parser = 'vim.fn.json_decode'
+  json_parser = 'vim.fn.json.decode'
 })
 EOF
 ```
@@ -125,7 +127,7 @@ VS Code uses json5 which allows use of comments and trailing commas.
 If you want to use the same tasks as your teammates, and they leave trailing commas and comments in the project's task.json,
 you will need another parser than the default `vim.fn.json_decode`.
 
-A proposed solution: 
+A proposed solution:
 Add the following to your dependencies.
 
 ```lua
@@ -137,7 +139,7 @@ lua <<EOF
 EOF
 ```
 
-And add the following option in the setup: 
+And add the following option in the setup:
 
 ```lua
 lua <<EOF
@@ -146,7 +148,6 @@ require("vstask").setup({
 })
 EOF
 ```
-
 
 ## Example
 
@@ -158,36 +159,35 @@ In your project root set up `.vscode/tasks.json` (default config directory set t
 {
   "version": "2.0.0",
   "tasks": [
-  {
-    "label": "🧪 Run unit tests that match the expression",
-    "type": "shell",
-    "command": "pytest -k '${input:expression}'"
-  },
-  {
-    "label": "🐮 Cowsay",
-    "type": "shell",
-    "command": "echo ${input:cowmsg} | cowsay"
-  }
+    {
+      "label": "🧪 Run unit tests that match the expression",
+      "type": "shell",
+      "command": "pytest -k '${input:expression}'"
+    },
+    {
+      "label": "🐮 Cowsay",
+      "type": "shell",
+      "command": "echo ${input:cowmsg} | cowsay"
+    }
   ],
   "inputs": [
-  {
-    "id": "expression",
-    "description": "Expression to filter tests with",
-    "default": "",
-    "type": "promptString"
-  },
-  {
-    "id": "cowmsg",
-    "description": "Message for cow to say",
-    "default": "Hello there!",
-    "type": "promptString"
-  }
+    {
+      "id": "expression",
+      "description": "Expression to filter tests with",
+      "default": "",
+      "type": "promptString"
+    },
+    {
+      "id": "cowmsg",
+      "description": "Message for cow to say",
+      "default": "Hello there!",
+      "type": "promptString"
+    }
   ]
 }
 ```
 
 ### Functions
-
 
 ```lua
 lua require("telescope").extensions.vstask.tasks() -- open task list in telescope
