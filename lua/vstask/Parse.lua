@@ -281,58 +281,58 @@ local function get_predefined_variables(command)
 end
 
 local extract_variables = function(command, inputs)
-    local input_vars = get_input_variables(command)
-    local env_vars = get_env_variables(command)
-    local predefined_vars = get_predefined_variables(command)
-    local missing = {}
-    for _, input_var in pairs(input_vars) do
-        local found = false
-        for _, stored_inputs in pairs(inputs) do
-            if stored_inputs["id"] == input_var and stored_inputs["value"] ~= "" then
-                found = true
-            end
-        end
-        if not found then
-            table.insert(missing, input_var)
-        end
+  local input_vars = get_input_variables(command)
+  local env_vars = get_env_variables(command)
+  local predefined_vars = get_predefined_variables(command)
+  local missing = {}
+  for _, input_var in pairs(input_vars) do
+    local found = false
+    for _, stored_inputs in pairs(inputs) do
+      if stored_inputs["id"] == input_var and stored_inputs["value"] ~= "" then
+        found = true
+      end
     end
-    for _, input in pairs(missing) do
-        load_input_variable(input)
+    if not found then
+      table.insert(missing, input_var)
     end
-    return input_vars, predefined_vars, env_vars
+  end
+  for _, input in pairs(missing) do
+    load_input_variable(input)
+  end
+  return input_vars, predefined_vars, env_vars
 end
 
 local function replace_vars_in_command(command)
-    local inputs = get_inputs()
-    local input_vars, predefined_vars, env_vars = extract_variables(command, inputs)
-    for _, replacing in pairs(input_vars) do
-        local replace_pattern = "${input:" .. replacing .. "}"
-        local replace = get_input_variable(replacing, inputs)
-        command = string.gsub(command, replace_pattern, replace)
-    end
+  local inputs = get_inputs()
+  local input_vars, predefined_vars, env_vars = extract_variables(command, inputs)
+  for _, replacing in pairs(input_vars) do
+    local replace_pattern = "${input:" .. replacing .. "}"
+    local replace = get_input_variable(replacing, inputs)
+    command = string.gsub(command, replace_pattern, replace)
+  end
 
-    for _, replacing in pairs(env_vars) do
-        local replace_pattern = "${env:" .. replacing .. "}"
-        local replace = get_env_variable(replacing)
-        command = string.gsub(command, replace_pattern, replace)
-    end
+  for _, replacing in pairs(env_vars) do
+    local replace_pattern = "${env:" .. replacing .. "}"
+    local replace = get_env_variable(replacing)
+    command = string.gsub(command, replace_pattern, replace)
+  end
 
-    for _, replacing in pairs(predefined_vars) do
-        local func = get_predefined_function(replacing, Predefined)
-        if func ~= nil then
-            local replace_pattern = "${" .. replacing .. "}"
-            command = string.gsub(command, replace_pattern, func())
-        end
+  for _, replacing in pairs(predefined_vars) do
+    local func = get_predefined_function(replacing, Predefined)
+    if func ~= nil then
+      local replace_pattern = "${" .. replacing .. "}"
+      command = string.gsub(command, replace_pattern, func())
     end
-    return command
+  end
+  return command
 end
 
 local function build_launch(program, args)
-    local command = program
-    for _, arg in pairs(args) do
-        command = command .. " " .. arg
-    end
-    return command
+  local command = program
+  for _, arg in pairs(args) do
+    command = command .. " " .. arg
+  end
+  return command
 end
 
 local function get_launches()
