@@ -3,6 +3,7 @@ local state = require("telescope.actions.state")
 local finders = require("telescope.finders")
 local pickers = require("telescope.pickers")
 local sorters = require("telescope.sorters")
+local previewers = require("telescope.previewers")
 local Parse = require("vstask.Parse")
 local Opts = require("vstask.Opts")
 local Command_handler = nil
@@ -76,12 +77,24 @@ end
 local process_command_background = function(command)
 	vim.notify("Running in background: " .. command, vim.log.levels.INFO)
 
+	local output = {}
 	local job_id = vim.fn.jobstart(command, {
+		on_stdout = function(_, data)
+			if data then
+				vim.list_extend(output, data)
+			end
+		end,
+		on_stderr = function(_, data)
+			if data then
+				vim.list_extend(output, data)
+			end
+		end,
 		on_exit = function(_, exit_code)
 			if exit_code == 0 then
 				vim.notify("Background job completed: " .. command, vim.log.levels.INFO)
 			else
-				vim.notify("Background job failed: " .. command, vim.log.levels.ERROR)
+				local error_msg = table.concat(output, "\n")
+				vim.notify("Background job failed: " .. command .. "\nOutput:\n" .. error_msg, vim.log.levels.ERROR)
 			end
 			if background_jobs ~= nil then
 				background_jobs[job_id] = nil
@@ -96,6 +109,7 @@ local process_command_background = function(command)
 			id = job_id,
 			command = command,
 			start_time = os.time(),
+			output = output,
 		}
 	end
 end
@@ -392,6 +406,14 @@ local function background_jobs_list(opts)
 				results = jobs_formatted,
 			}),
 			sorter = sorters.get_generic_fuzzy_sorter(),
+			previewer = previewers.new_buffer_previewer({
+				title = "Job Output",
+				define_preview = function(self, entry)
+					local job = jobs_list[entry.index]
+					local output = job.output or {}
+					vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, output)
+				end,
+			}),
 			attach_mappings = function(prompt_bufnr, map)
 				local kill_job = function()
 					local selection = state.get_selected_entry(prompt_bufnr)
