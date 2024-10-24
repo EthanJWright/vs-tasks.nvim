@@ -61,6 +61,7 @@ nnoremap <Leader>ta :lua require("telescope").extensions.vstask.tasks()<CR>
 nnoremap <Leader>ti :lua require("telescope").extensions.vstask.inputs()<CR>
 nnoremap <Leader>th :lua require("telescope").extensions.vstask.history()<CR>
 nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
+nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
 ```
 
 _Note:_ When the task telescope is open:
@@ -68,6 +69,7 @@ _Note:_ When the task telescope is open:
 - Enter will open in toggleterm
 - Ctrl-v will open in a vertical split terminal
 - Ctrl-p will open in a split terminal
+- Ctrl-b will run the task in the background
 
 ### Autodetect
 
@@ -91,10 +93,11 @@ require("vstask").setup({
   config_dir = ".vscode", -- directory to look for tasks.json and launch.json
   use_harpoon = true, -- use harpoon to auto cache terminals
   telescope_keys = { -- change the telescope bindings used to launch tasks
-      vertical = '<C-v>',
-      split = '<C-p>',
-      tab = '<C-t>',
-      current = '<CR>',
+    vertical = '<C-v>',
+    split = '<C-p>',
+    tab = '<C-t>',
+    current = '<CR>',
+    background = '<C-b>',
   },
   autodetect = { -- auto load scripts
     npm = "on"
@@ -194,6 +197,7 @@ lua require("telescope").extensions.vstask.tasks() -- open task list in telescop
 lua require("telescope").extensions.vstask.inputs() -- open the input list, set new input
 lua require("telescope").extensions.vstask.history() -- search history of tasks
 lua require("telescope").extensions.vstask.close() -- close the task runner (if toggleterm)
+lua require("telescope").extensions.vstask.jobs() -- view and manage background tasks (Enter to kill)
 ```
 
 You can also configure themes and pass options to the picker
