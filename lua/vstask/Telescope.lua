@@ -412,6 +412,7 @@ local function background_jobs_list(opts)
 					local job = jobs_list[entry.index]
 					local output = job.output or {}
 					vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, output)
+					vim.api.nvim_set_option_value("filetype", "sh", { buf = self.state.bufnr })
 				end,
 			}),
 			attach_mappings = function(prompt_bufnr, map)
