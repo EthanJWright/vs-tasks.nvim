@@ -145,7 +145,7 @@ local function inputs(opts)
 
 	local input_list = Parse.Inputs()
 
-	if vim.tbl_isempty(input_list) then
+	if input_list == nil or vim.tbl_isempty(input_list) then
 		return
 	end
 
