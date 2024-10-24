@@ -78,7 +78,8 @@ local process_command_background = function(command)
 	vim.notify("Running in background: " .. command, vim.log.levels.INFO)
 
 	local output = {}
-	local job_id = vim.fn.jobstart(command, {
+	local job_id
+	job_id = vim.fn.jobstart(command, {
 		on_stdout = function(_, data)
 			if data then
 				vim.list_extend(output, data)
@@ -96,9 +97,7 @@ local process_command_background = function(command)
 				local error_msg = table.concat(output, "\n")
 				vim.notify("Background job failed: " .. command .. "\nOutput:\n" .. error_msg, vim.log.levels.ERROR)
 			end
-			if background_jobs ~= nil then
-				background_jobs[job_id] = nil
-			end
+			background_jobs[job_id] = nil
 		end,
 	})
 
