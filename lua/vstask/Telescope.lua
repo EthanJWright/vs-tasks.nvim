@@ -469,7 +469,7 @@ local function background_jobs_list(opts)
 
 	pickers
 		.new(opts, {
-			prompt_title = "Background Jobs (enter to kill)",
+			prompt_title = "Background Jobs",
 			finder = finders.new_table({
 				results = jobs_formatted,
 			}),
