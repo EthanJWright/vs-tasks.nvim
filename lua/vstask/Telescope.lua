@@ -82,7 +82,7 @@ local function toggle_watch(id)
 	background_jobs[id].watch = not background_jobs[id].watch
 end
 
-local function preview_job_output(output, bufnr)
+local function preview_job_output(output, bufnr, job_id)
 	local max_lines = 1000 -- Show last 1000 lines
 	local start_idx = #output > max_lines and #output - max_lines or 0
 	local recent_output = vim.list_slice(output, start_idx + 1)
@@ -96,8 +96,23 @@ local function preview_job_output(output, bufnr)
 			vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
 		end
 	end)
-end
 
+	-- Set up live updates for preview if job is running
+	if job_id then
+		local job = background_jobs[job_id]
+		if job then
+			-- Create autocmd to update preview buffer
+			vim.api.nvim_create_autocmd("User", {
+				pattern = "VsTaskJobOutput",
+				callback = function()
+					if vim.api.nvim_buf_is_valid(bufnr) then
+						preview_job_output(job.output, bufnr)
+					end
+				end,
+			})
+		end
+	end
+end
 local function open_job_output(output, job_id, direction)
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
@@ -158,6 +173,10 @@ local process_command_background = function(label, command, silent, watch)
 						end
 					end)
 				end
+				-- Trigger update for preview buffers
+				vim.schedule(function()
+					vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
+				end)
 			end
 		end,
 		on_stderr = function(_, data)
@@ -589,7 +608,7 @@ local function background_jobs_list(opts)
 				define_preview = function(self, entry)
 					local job = jobs_list[entry.index]
 					local output = job.output or {}
-					preview_job_output(output, self.state.bufnr)
+					preview_job_output(output, self.state.bufnr, job.id)
 				end,
 			}),
 			attach_mappings = function(prompt_bufnr, map)
