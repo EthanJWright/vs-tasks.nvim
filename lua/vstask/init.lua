@@ -35,6 +35,11 @@ local function config(opts)
 	if opts.json_parser ~= nil then
 		M.Parse.Set_json_parser(opts.json_parser)
 	end
+
+	if opts.user_cmd_config ~= nil then
+		vim.notify("Setting user_cmd_config")
+		M.Parse.Set_user_cmd_config(opts.user_cmd_config)
+	end
 end
 
 M.config = function(opts)

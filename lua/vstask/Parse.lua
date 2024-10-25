@@ -26,8 +26,8 @@ local function set_user_cmd_config(value)
 	end
 end
 
-local function add_user_cmds(lang, current_tasks)
-	local tasks = user_command_config[lang]
+local function add_user_cmds(current_tasks, match)
+	local tasks = user_command_config[match]
 	-- append tasks to current_tasks
 	if tasks == nil then
 		return current_tasks
@@ -213,6 +213,8 @@ local function auto_detect_npm()
 			table.insert(script_tasks, { label = label, type = "npm", command = "npm run " .. key })
 		end
 	end
+
+	script_tasks = add_user_cmds(script_tasks, "npm")
 
 	return script_tasks
 end
@@ -424,5 +426,5 @@ return {
 	Set_cache_json_conf = set_cache_json_conf,
 	Set_config_dir = set_config_dir,
 	Set_json_parser = set_json_parser,
-	Set_defaults = set_user_cmd_config,
+	Set_user_cmd_config = set_user_cmd_config,
 }
