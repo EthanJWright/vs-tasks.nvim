@@ -8,5 +8,6 @@ return require("telescope").register_extension({
 		launch = Telescope.Launch,
 		close = Telescope.Close,
 		jobs = Telescope.Jobs,
+		jobhistory = Telescope.JobHistory,
 	},
 })

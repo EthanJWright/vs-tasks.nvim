@@ -18,6 +18,8 @@ local Mappings = {
 
 local command_history = {}
 local background_jobs = {}
+local job_history = {}
+
 local function set_history(label, command, options)
 	if not command_history[label] then
 		command_history[label] = {
@@ -79,6 +81,29 @@ local function toggle_watch(id)
 	background_jobs[id].watch = not background_jobs[id].watch
 end
 
+local function preview_job_output(output, bufnr)
+	local max_lines = 1000 -- Show last 1000 lines
+	local start_idx = #output > max_lines and #output - max_lines or 0
+	local recent_output = vim.list_slice(output, start_idx + 1)
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, recent_output)
+	vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
+	-- Scroll to bottom of preview
+	vim.schedule(function()
+		local win = vim.fn.bufwinid(bufnr)
+		if win ~= -1 then
+			vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(bufnr), 0 })
+			vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
+		end
+	end)
+end
+
+local function open_job_output(output)
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
+	vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
+	vim.api.nvim_win_set_buf(0, buf)
+end
+
 local process_command_background = function(label, command, silent, watch)
 	local function notify(msg, level)
 		if not silent then
@@ -118,6 +143,14 @@ local process_command_background = function(label, command, silent, watch)
 				local error_msg = table.concat(output, "\n")
 				notify("Background job failed: " .. command .. "\nOutput:\n" .. error_msg, vim.log.levels.ERROR)
 			end
+			local job = background_jobs[job_id]
+			table.insert(job_history, {
+				label = job.label,
+				end_time = os.time(),
+				start_time = job.start_time,
+				exit_code = exit_code,
+				output = job.output,
+			})
 			background_jobs[job_id] = nil
 		end,
 	})
@@ -450,6 +483,32 @@ function Add_watch_autocmd()
 	end
 end
 
+local function format_job_entry(job_info, is_running)
+	local runtime
+	if is_running then
+		runtime = os.time() - job_info.start_time - (job_info.end_time or 0)
+	else
+		runtime = job_info.end_time - job_info.start_time
+	end
+
+	local formatted = string.format("%s - (runtime %ds)", job_info.label, runtime)
+	if job_info.watch then
+		formatted = "👀 " .. formatted
+	end
+
+	if is_running then
+		formatted = "🟠 " .. formatted
+	else
+		if job_info.exit_code == 0 then
+			formatted = "🟢 " .. formatted
+		else
+			formatted = string.format("🔴 [exit code - (%d)] ", job_info.exit_code) .. formatted
+		end
+	end
+
+	return formatted
+end
+
 local function background_jobs_list(opts)
 	opts = opts or {}
 
@@ -460,28 +519,7 @@ local function background_jobs_list(opts)
 		table.insert(jobs_list, job_info)
 		local job_status = vim.fn.jobwait({ job_id }, 0)[1]
 		local is_running = job_status == -1
-
-		local runtime = os.time() - job_info.start_time - job_info.end_time
-		if not is_running then
-			runtime = job_info.end_time - job_info.start_time
-		end
-
-		local formatted = string.format("%s - (runtime %ds)", job_info.label, runtime)
-		if job_info.watch then
-			formatted = "👀 " .. formatted
-		end
-
-		if is_running then
-			formatted = "🟠 " .. formatted
-		else
-			if job_info.exit_code == 0 then
-				formatted = "🟢 " .. formatted
-			else
-				formatted = string.format("🔴 [exit code - (%d)]", job_info.exit_code) .. formatted
-			end
-		end
-
-		table.insert(jobs_formatted, formatted)
+		table.insert(jobs_formatted, format_job_entry(job_info, is_running))
 	end
 
 	if vim.tbl_isempty(jobs_formatted) then
@@ -501,19 +539,7 @@ local function background_jobs_list(opts)
 				define_preview = function(self, entry)
 					local job = jobs_list[entry.index]
 					local output = job.output or {}
-					local max_lines = 1000 -- Show last 1000 lines
-					local start_idx = #output > max_lines and #output - max_lines or 0
-					local recent_output = vim.list_slice(output, start_idx + 1)
-					vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, recent_output)
-					vim.api.nvim_set_option_value("filetype", "sh", { buf = self.state.bufnr })
-					-- Scroll to bottom of preview
-					vim.schedule(function()
-						local win = vim.fn.bufwinid(self.state.bufnr)
-						if win ~= -1 then
-							vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(self.state.bufnr), 0 })
-							vim.api.nvim_set_option_value("filetype", "sh", { buf = self.state.bufnr })
-						end
-					end)
+					preview_job_output(output, self.state.bufnr)
 				end,
 			}),
 			attach_mappings = function(prompt_bufnr, map)
@@ -539,10 +565,7 @@ local function background_jobs_list(opts)
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
 					local output = job.output or {}
-					local buf = vim.api.nvim_create_buf(false, true)
-					vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
-					vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
-					vim.api.nvim_win_set_buf(0, buf)
+					open_job_output(output)
 				end
 
 				map("i", "<C-k>", kill_job)
@@ -558,12 +581,60 @@ local function background_jobs_list(opts)
 		:find()
 end
 
+local function job_history_list(opts)
+	opts = opts or {}
+
+	local jobs_formatted = {}
+
+	if vim.tbl_isempty(job_history) then
+		vim.notify("No job history available", vim.log.levels.INFO)
+		return
+	end
+
+	for _, job_info in ipairs(job_history) do
+		table.insert(jobs_formatted, format_job_entry(job_info, false))
+	end
+
+	pickers
+		.new(opts, {
+			prompt_title = "Job History",
+			finder = finders.new_table({
+				results = jobs_formatted,
+			}),
+			sorter = sorters.get_generic_fuzzy_sorter(),
+			previewer = previewers.new_buffer_previewer({
+				title = "Job Info",
+				define_preview = function(self, entry)
+					local job = job_history[entry.index]
+					local output = job.output or {}
+					preview_job_output(output, self.state.bufnr)
+				end,
+			}),
+			attach_mappings = function(prompt_bufnr, map)
+				local open_in_temp_buffer = function()
+					local selection = state.get_selected_entry(prompt_bufnr)
+					actions.close(prompt_bufnr)
+					local job = job_history[selection.index]
+					local output = job.output or {}
+					open_job_output(output)
+				end
+
+				map("i", "<CR>", open_in_temp_buffer)
+				map("n", "<CR>", open_in_temp_buffer)
+
+				return true
+			end,
+		})
+		:find()
+end
+
 return {
 	Launch = launches,
 	Tasks = tasks,
 	Inputs = inputs,
 	History = history,
 	Jobs = background_jobs_list,
+	JobHistory = job_history_list,
 	Set_command_handler = set_command_handler,
 	Set_mappings = set_mappings,
 	Set_term_opts = set_term_opts,

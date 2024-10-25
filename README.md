@@ -10,6 +10,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
   - source from package.json scripts
 - 👀 Run any task as a watched job
 - 🧵 Run any task in the background
+- 📖 Browse history of completed background jobs
 - ✏️ edit input variables that will be used for the session
 - Use VS Code's [variables](https://code.visualstudio.com/docs/editor/variables-reference) in the command (limited support, see desired features)
 - Use VS Code's [launch.json](https://code.visualstudio.com/docs/editor/debugging#_launch-configurations) pattern (limited support)
@@ -66,6 +67,7 @@ nnoremap <Leader>ti :lua require("telescope").extensions.vstask.inputs()<CR>
 nnoremap <Leader>th :lua require("telescope").extensions.vstask.history()<CR>
 nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
 nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
+nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
 ```
 
 ## Usage
