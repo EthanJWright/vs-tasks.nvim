@@ -629,7 +629,7 @@ local function background_jobs_list(opts)
 					toggle_watch(job.id)
 				end
 
-				local open_in_temp_buffer = function()
+				local open_history = function()
 					local selection = state.get_selected_entry(prompt_bufnr)
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
@@ -647,8 +647,8 @@ local function background_jobs_list(opts)
 
 				map("i", "<C-k>", kill_job)
 				map("n", "<C-k>", kill_job)
-				map("i", "<CR>", open_in_temp_buffer)
-				map("n", "<CR>", open_in_temp_buffer)
+				map("i", "<CR>", open_history)
+				map("n", "<CR>", open_history)
 				map("i", "<C-v>", open_in_temp_buffer_vertical)
 				map("n", "<C-v>", open_in_temp_buffer_vertical)
 				map("i", "<C-w>", toggle_watch_binding)
@@ -690,24 +690,27 @@ local function job_history_list(opts)
 				end,
 			}),
 			attach_mappings = function(prompt_bufnr, map)
-				local function open_in_temp_buffer(direction)
-					return function()
-						local selection = state.get_selected_entry(prompt_bufnr)
-						actions.close(prompt_bufnr)
-						local job = job_history[selection.index]
-						local output = job.output or {}
-						open_job_output(output, job.id, direction)
-					end
+				local function open_in_temp_buffer()
+					local selection = state.get_selected_entry(prompt_bufnr)
+					actions.close(prompt_bufnr)
+					local job = job_history[selection.index]
+					local output = job.output or {}
+					local buf = vim.api.nvim_create_buf(false, true)
+					vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
+					vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
+					vim.api.nvim_win_set_buf(0, buf)
 				end
 
 				local function open_in_temp_buffer_vertical()
-					return function()
-						local selection = state.get_selected_entry(prompt_bufnr)
-						actions.close(prompt_bufnr)
-						local job = job_history[selection.index]
-						local output = job.output or {}
-						open_job_output(output, job.id, "vertical")
-					end
+					local selection = state.get_selected_entry(prompt_bufnr)
+					actions.close(prompt_bufnr)
+					local job = job_history[selection.index]
+					vim.cmd("vsplit")
+					local output = job.output or {}
+					local buf = vim.api.nvim_create_buf(false, true)
+					vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
+					vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
+					vim.api.nvim_win_set_buf(0, buf)
 				end
 
 				map("i", "<CR>", open_in_temp_buffer)
