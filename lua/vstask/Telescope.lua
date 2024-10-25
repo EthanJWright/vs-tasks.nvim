@@ -6,6 +6,7 @@ local sorters = require("telescope.sorters")
 local previewers = require("telescope.previewers")
 local Parse = require("vstask.Parse")
 local Opts = require("vstask.Opts")
+local quickfix = require("vstask.Quickfix")
 local Command_handler = nil
 local Mappings = {
 	vertical = "<C-v>",
@@ -212,6 +213,12 @@ local process_command_background = function(label, command, silent, watch)
 				local error_msg = table.concat(output, "\n")
 				notify("Background job failed: " .. command .. "\nOutput:\n" .. error_msg, vim.log.levels.ERROR)
 			end
+
+			-- Handle quickfix notification
+			if exit_code ~= 0 then
+				quickfix.toquickfix(table.concat(output, "\n"))
+			end
+
 			local job = background_jobs[job_id]
 			table.insert(job_history, {
 				label = job.label,
