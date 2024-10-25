@@ -107,6 +107,8 @@ local process_command_background = function(label, command, silent, watch)
 		end,
 		on_exit = function(_, exit_code)
 			if background_jobs[job_id].watch == true then
+				background_jobs[job_id].end_time = os.time()
+				background_jobs[job_id].exit_code = exit_code
 				return
 			end
 
@@ -130,6 +132,8 @@ local process_command_background = function(label, command, silent, watch)
 			output = output,
 			watch = watch,
 			label = label,
+			end_time = 0,
+			exit_code = -1,
 		}
 	end
 end
@@ -452,13 +456,31 @@ local function background_jobs_list(opts)
 	local jobs_list = {}
 	local jobs_formatted = {}
 
-	for _, job_info in pairs(background_jobs) do
+	for job_id, job_info in pairs(background_jobs) do
 		table.insert(jobs_list, job_info)
-		local runtime = os.time() - job_info.start_time
+		local job_status = vim.fn.jobwait({ job_id }, 0)[1]
+		local is_running = job_status == -1
+
+		local runtime = os.time() - job_info.start_time - job_info.end_time
+		if not is_running then
+			runtime = job_info.end_time - job_info.start_time
+		end
+
 		local formatted = string.format("%s - (runtime %ds)", job_info.label, runtime)
 		if job_info.watch then
-			formatted = "󱥼 " .. formatted
+			formatted = "👀 " .. formatted
 		end
+
+		if is_running then
+			formatted = "🟠 " .. formatted
+		else
+			if job_info.exit_code == 0 then
+				formatted = "🟢 " .. formatted
+			else
+				formatted = string.format("🔴 [exit code - (%d)]", job_info.exit_code) .. formatted
+			end
+		end
+
 		table.insert(jobs_formatted, formatted)
 	end
 
@@ -479,8 +501,19 @@ local function background_jobs_list(opts)
 				define_preview = function(self, entry)
 					local job = jobs_list[entry.index]
 					local output = job.output or {}
-					vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, output)
+					local max_lines = 1000 -- Show last 1000 lines
+					local start_idx = #output > max_lines and #output - max_lines or 0
+					local recent_output = vim.list_slice(output, start_idx + 1)
+					vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, recent_output)
 					vim.api.nvim_set_option_value("filetype", "sh", { buf = self.state.bufnr })
+					-- Scroll to bottom of preview
+					vim.schedule(function()
+						local win = vim.fn.bufwinid(self.state.bufnr)
+						if win ~= -1 then
+							vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(self.state.bufnr), 0 })
+							vim.api.nvim_set_option_value("filetype", "sh", { buf = self.state.bufnr })
+						end
+					end)
 				end,
 			}),
 			attach_mappings = function(prompt_bufnr, map)
