@@ -75,6 +75,10 @@ local function set_mappings(new_mappings)
 	end
 end
 
+local function toggle_watch(id)
+	background_jobs[id].watch = not background_jobs[id].watch
+end
+
 local process_command_background = function(label, command, silent, watch)
 	local function notify(msg, level)
 		if not silent then
@@ -490,17 +494,30 @@ local function background_jobs_list(opts)
 					background_jobs[job.id] = nil
 				end
 
-				local watch_selection = function()
+				local toggle_watch_binding = function()
 					local selection = state.get_selected_entry(prompt_bufnr)
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
-					background_jobs[job_id].watch = true
+					toggle_watch(job.id)
 				end
 
-				map("i", "<CR>", kill_job)
-				map("n", "<CR>", kill_job)
-				map("i", "<C-w>", watch_selection)
-				map("n", "<C-w>", watch_selection)
+				local open_in_temp_buffer = function()
+					local selection = state.get_selected_entry(prompt_bufnr)
+					actions.close(prompt_bufnr)
+					local job = jobs_list[selection.index]
+					local output = job.output or {}
+					local buf = vim.api.nvim_create_buf(false, true)
+					vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
+					vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
+					vim.api.nvim_win_set_buf(0, buf)
+				end
+
+				map("i", "<C-k>", kill_job)
+				map("n", "<C-k>", kill_job)
+				map("i", "<CR>", open_in_temp_buffer)
+				map("n", "<CR>", open_in_temp_buffer)
+				map("i", "<C-w>", toggle_watch_binding)
+				map("n", "<C-w>", toggle_watch_binding)
 
 				return true
 			end,
