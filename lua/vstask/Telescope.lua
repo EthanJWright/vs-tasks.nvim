@@ -75,7 +75,7 @@ local function set_mappings(new_mappings)
 	end
 end
 
-local process_command_background = function(command, silent, watch)
+local process_command_background = function(label, command, silent, watch)
 	local function notify(msg, level)
 		if not silent then
 			vim.notify(msg, level)
@@ -125,6 +125,7 @@ local process_command_background = function(command, silent, watch)
 			start_time = os.time(),
 			output = output,
 			watch = watch,
+			label = label,
 		}
 	end
 end
@@ -228,7 +229,7 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 	end
 
 	if direction == "background" or direction == "watch" then
-		process_command_background(formatted_command.command, false, direction == "watch")
+		process_command_background(label, formatted_command.command, false, direction == "watch")
 	else
 		process_command(formatted_command.command, direction, Term_opts)
 		if direction ~= "current" then
@@ -413,7 +414,7 @@ local function restart_watched_jobs()
 				background_jobs[job_id] = nil
 
 				-- Job is confirmed stopped, start new one
-				process_command_background(command, true, true)
+				process_command_background(job_info.label, command, true, true)
 			else
 				vim.notify(string.format("Job %d is still running, skipping restart", job_id), vim.log.levels.INFO)
 			end
@@ -447,10 +448,10 @@ local function background_jobs_list(opts)
 	local jobs_list = {}
 	local jobs_formatted = {}
 
-	for job_id, job_info in pairs(background_jobs) do
+	for _, job_info in pairs(background_jobs) do
 		table.insert(jobs_list, job_info)
 		local runtime = os.time() - job_info.start_time
-		local formatted = string.format("[%d] Running for %ds: %s", job_id, runtime, job_info.command)
+		local formatted = string.format("%s - (runtime %ds)", job_info.label, runtime)
 		if job_info.watch then
 			formatted = "󱥼 " .. formatted
 		end
