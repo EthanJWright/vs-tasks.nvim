@@ -3,6 +3,41 @@ local Config = require("vstask.Config")
 local Predefined = require("vstask.Predefined")
 
 local cache_json_conf = true
+local user_command_config = {}
+
+-- {
+--    "ts" : {
+--      "enable_defaults": true,
+--      tasks: [
+--  {
+--    label: "run tests!",
+--  command: "npm run test",
+--  }
+--  ]
+--
+--  }
+--  }
+
+local function set_user_cmd_config(value)
+	if value == nil then
+		return
+	else
+		user_command_config = value
+	end
+end
+
+local function add_user_cmds(lang, current_tasks)
+	local tasks = user_command_config[lang]
+	-- append tasks to current_tasks
+	if tasks == nil then
+		return current_tasks
+	end
+
+	for _, task in pairs(tasks) do
+		table.insert(current_tasks, task)
+	end
+	return current_tasks
+end
 
 local function set_cache_json_conf(value)
 	cache_json_conf = value
@@ -151,9 +186,11 @@ local function update_cache(cache, key)
 end
 
 local function auto_detect_npm()
+	local defaults = { label = " install", command = "npm install", type = "npm" }
 	if auto_detect.npm == "off" then
 		return {}
 	end
+
 	local cwd = vim.fn.getcwd()
 	local packagejson = cwd .. "/package.json"
 	local script_tasks = {}
@@ -161,6 +198,9 @@ local function auto_detect_npm()
 	if not file_exists(packagejson) then
 		return script_tasks
 	end
+
+	-- load in defaults
+	table.insert(script_tasks, defaults)
 
 	local config = Config.load_json(packagejson, JSON_PARSER)
 	if config == nil then
@@ -173,7 +213,20 @@ local function auto_detect_npm()
 			table.insert(script_tasks, { label = label, type = "npm", command = "npm run " .. key })
 		end
 	end
+
 	return script_tasks
+end
+
+local function dedupe_commands(tasks)
+	local deduped = {}
+	local seen = {}
+	for _, task in pairs(tasks) do
+		if not seen[task.command] then
+			table.insert(deduped, task)
+			seen[task.command] = true
+		end
+	end
+	return deduped
 end
 
 local function tasks_file_exists()
@@ -223,7 +276,7 @@ local function get_tasks()
 		notify_missing_task_file()
 	end
 
-	return task_list
+	return dedupe_commands(task_list)
 end
 
 local function used_task(label)
@@ -371,4 +424,5 @@ return {
 	Set_cache_json_conf = set_cache_json_conf,
 	Set_config_dir = set_config_dir,
 	Set_json_parser = set_json_parser,
+	Set_defaults = set_user_cmd_config,
 }

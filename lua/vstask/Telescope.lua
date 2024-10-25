@@ -736,3 +736,7 @@ return {
 	Set_term_opts = set_term_opts,
 	Get_last = get_last,
 }
+
+-- TODO:
+-- add default package.json commands (npm i, etc)
+-- add ability to set default tasks per filetype
