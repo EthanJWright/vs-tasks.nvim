@@ -19,6 +19,7 @@ local Mappings = {
 local command_history = {}
 local background_jobs = {}
 local job_history = {}
+local live_output_buffers = {} -- Track buffers showing live job output
 
 local function set_history(label, command, options)
 	if not command_history[label] then
@@ -97,11 +98,33 @@ local function preview_job_output(output, bufnr)
 	end)
 end
 
-local function open_job_output(output)
+local function open_job_output(output, job_id, direction)
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
-	vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
+
+	if direction == "vertical" then
+		vim.cmd("vsplit")
+	end
+
 	vim.api.nvim_win_set_buf(0, buf)
+	vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
+
+	-- Set buffer name to indicate live status
+	if job_id then
+		local job = background_jobs[job_id]
+		if job then
+			vim.api.nvim_buf_set_name(buf, string.format("Job Output - %s (Live)", job.label))
+			live_output_buffers[job_id] = buf
+
+			-- Set buffer local autocmd to clean up when buffer is closed
+			vim.api.nvim_create_autocmd("BufWipeout", {
+				buffer = buf,
+				callback = function()
+					live_output_buffers[job_id] = nil
+				end,
+			})
+		end
+	end
 end
 
 local process_command_background = function(label, command, silent, watch)
@@ -123,11 +146,38 @@ local process_command_background = function(label, command, silent, watch)
 		on_stdout = function(_, data)
 			if data then
 				vim.list_extend(output, data)
+				-- Update live output buffer if it exists
+				if live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
+					vim.schedule(function()
+						vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, output)
+						-- Always scroll to bottom for live updates
+						local win = vim.fn.bufwinid(live_output_buffers[job_id])
+						if win ~= -1 then
+							local line_count = vim.api.nvim_buf_line_count(live_output_buffers[job_id])
+							vim.api.nvim_win_set_cursor(win, { line_count, 0 })
+						end
+					end)
+				end
 			end
 		end,
 		on_stderr = function(_, data)
 			if data then
 				vim.list_extend(output, data)
+				-- Update live output buffer if it exists
+				if live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
+					vim.schedule(function()
+						vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, output)
+						-- Scroll to bottom if cursor was at bottom
+						local win = vim.fn.bufwinid(live_output_buffers[job_id])
+						if win ~= -1 then
+							local curr_line = vim.api.nvim_win_get_cursor(win)[1]
+							local line_count = vim.api.nvim_buf_line_count(live_output_buffers[job_id])
+							if curr_line >= line_count - 5 then
+								vim.api.nvim_win_set_cursor(win, { line_count, 0 })
+							end
+						end
+					end)
+				end
 			end
 		end,
 		on_exit = function(_, exit_code)
@@ -565,13 +615,23 @@ local function background_jobs_list(opts)
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
 					local output = job.output or {}
-					open_job_output(output)
+					open_job_output(output, job.id)
+				end
+
+				local open_in_temp_buffer_vertical = function()
+					local selection = state.get_selected_entry(prompt_bufnr)
+					actions.close(prompt_bufnr)
+					local job = jobs_list[selection.index]
+					local output = job.output or {}
+					open_job_output(output, job.id, "vertical")
 				end
 
 				map("i", "<C-k>", kill_job)
 				map("n", "<C-k>", kill_job)
 				map("i", "<CR>", open_in_temp_buffer)
 				map("n", "<CR>", open_in_temp_buffer)
+				map("i", "<C-v>", open_in_temp_buffer_vertical)
+				map("n", "<C-v>", open_in_temp_buffer_vertical)
 				map("i", "<C-w>", toggle_watch_binding)
 				map("n", "<C-w>", toggle_watch_binding)
 
@@ -611,16 +671,30 @@ local function job_history_list(opts)
 				end,
 			}),
 			attach_mappings = function(prompt_bufnr, map)
-				local open_in_temp_buffer = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
-					local job = job_history[selection.index]
-					local output = job.output or {}
-					open_job_output(output)
+				local function open_in_temp_buffer(direction)
+					return function()
+						local selection = state.get_selected_entry(prompt_bufnr)
+						actions.close(prompt_bufnr)
+						local job = job_history[selection.index]
+						local output = job.output or {}
+						open_job_output(output, job.id, direction)
+					end
+				end
+
+				local function open_in_temp_buffer_vertical()
+					return function()
+						local selection = state.get_selected_entry(prompt_bufnr)
+						actions.close(prompt_bufnr)
+						local job = job_history[selection.index]
+						local output = job.output or {}
+						open_job_output(output, job.id, "vertical")
+					end
 				end
 
 				map("i", "<CR>", open_in_temp_buffer)
 				map("n", "<CR>", open_in_temp_buffer)
+				map("i", "<C-v>", open_in_temp_buffer_vertical)
+				map("n", "<C-v>", open_in_temp_buffer_vertical)
 
 				return true
 			end,
