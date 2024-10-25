@@ -4,8 +4,12 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 
 ## Features
 
-- ⚙ Run tasks with [Toggleterm](https://github.com/akinsho/nvim-toggleterm.lua)
-  - run tasks in a horizontal or vertical split terminal
+- ⚙ Run commands in a terminal!
+  - split or float the terminal
+  - source from ./vscode/tasks.json
+  - source from package.json scripts
+- 👀 Run any task as a watched job
+- 🧵 Run any task in the background
 - ✏️ edit input variables that will be used for the session
 - Use VS Code's [variables](https://code.visualstudio.com/docs/editor/variables-reference) in the command (limited support, see desired features)
 - Use VS Code's [launch.json](https://code.visualstudio.com/docs/editor/debugging#_launch-configurations) pattern (limited support)
@@ -98,6 +102,7 @@ require("vstask").setup({
     tab = '<C-t>',
     current = '<CR>',
     background = '<C-b>',
+    watch = '<C-w>',
   },
   autodetect = { -- auto load scripts
     npm = "on"

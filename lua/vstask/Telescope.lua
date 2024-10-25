@@ -13,6 +13,7 @@ local Mappings = {
 	tab = "<C-t>",
 	current = "<CR>",
 	background = "<C-b>",
+	watch = "<C-w>",
 }
 
 local command_history = {}
@@ -74,8 +75,18 @@ local function set_mappings(new_mappings)
 	end
 end
 
-local process_command_background = function(command)
-	vim.notify("Running in background: " .. command, vim.log.levels.INFO)
+local process_command_background = function(command, silent, watch)
+	local function notify(msg, level)
+		if not silent then
+			vim.notify(msg, level)
+		end
+	end
+
+	if watch then
+		Add_watch_autocmd()
+	end
+
+	notify("Running in background: " .. command, vim.log.levels.INFO)
 
 	local output = {}
 	local job_id
@@ -91,24 +102,29 @@ local process_command_background = function(command)
 			end
 		end,
 		on_exit = function(_, exit_code)
+			if background_jobs[job_id].watch == true then
+				return
+			end
+
 			if exit_code == 0 then
-				vim.notify("Background job completed: " .. command, vim.log.levels.INFO)
+				notify("Background job completed: " .. command, vim.log.levels.INFO)
 			else
 				local error_msg = table.concat(output, "\n")
-				vim.notify("Background job failed: " .. command .. "\nOutput:\n" .. error_msg, vim.log.levels.ERROR)
+				notify("Background job failed: " .. command .. "\nOutput:\n" .. error_msg, vim.log.levels.ERROR)
 			end
 			background_jobs[job_id] = nil
 		end,
 	})
 
 	if job_id <= 0 then
-		vim.notify("Failed to start background job: " .. command, vim.log.levels.ERROR)
+		notify("Failed to start background job: " .. command, vim.log.levels.ERROR)
 	else
 		background_jobs[job_id] = {
 			id = job_id,
 			command = command,
 			start_time = os.time(),
 			output = output,
+			watch = watch,
 		}
 	end
 end
@@ -211,8 +227,8 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		formatted_command.command = Parse.Build_launch(formatted_command.command, args)
 	end
 
-	if direction == "background" then
-		process_command_background(formatted_command.command)
+	if direction == "background" or direction == "watch" then
+		process_command_background(formatted_command.command, false, direction == "watch")
 	else
 		process_command(formatted_command.command, direction, Term_opts)
 		if direction ~= "current" then
@@ -314,6 +330,7 @@ local function tasks(opts)
 						horizontal = Mappings.split,
 						tab = Mappings.tab,
 						background = Mappings.background,
+						watch = Mappings.watch,
 					}
 
 					for direction, mapping in pairs(directions) do
@@ -380,6 +397,50 @@ local function launches(opts)
 		:find()
 end
 
+local function restart_watched_jobs()
+	for _, job_info in pairs(background_jobs) do
+		if job_info.watch then
+			local command = job_info.command
+			local job_id = job_info.id
+			-- Stop the job and wait for confirmation before starting new one
+			vim.fn.jobstop(job_id)
+
+			-- Use timer to ensure job is fully stopped before restarting
+			local job_status = vim.fn.jobwait({ job_id }, -1)[1]
+			local is_running = job_status == -1
+			if not is_running then
+				-- Remove from background_jobs to prevent duplicate entries
+				background_jobs[job_id] = nil
+
+				-- Job is confirmed stopped, start new one
+				process_command_background(command, true, true)
+			else
+				vim.notify(string.format("Job %d is still running, skipping restart", job_id), vim.log.levels.INFO)
+			end
+		end
+	end
+end
+
+function Add_watch_autocmd()
+	-- Check if autocmd already exists
+	local autocmds = vim.api.nvim_get_autocmds({
+		event = "BufWritePost",
+		pattern = "*",
+	})
+
+	local existing = vim.tbl_filter(function(autocmd)
+		return autocmd.desc == "Restart watched background tasks on file save"
+	end, autocmds)
+
+	if #existing == 0 then
+		vim.api.nvim_create_autocmd("BufWritePost", {
+			pattern = "*",
+			callback = restart_watched_jobs,
+			desc = "Restart watched background tasks on file save",
+		})
+	end
+end
+
 local function background_jobs_list(opts)
 	opts = opts or {}
 
@@ -390,6 +451,9 @@ local function background_jobs_list(opts)
 		table.insert(jobs_list, job_info)
 		local runtime = os.time() - job_info.start_time
 		local formatted = string.format("[%d] Running for %ds: %s", job_id, runtime, job_info.command)
+		if job_info.watch then
+			formatted = "󱥼 " .. formatted
+		end
 		table.insert(jobs_formatted, formatted)
 	end
 
@@ -425,8 +489,17 @@ local function background_jobs_list(opts)
 					background_jobs[job.id] = nil
 				end
 
+				local watch_selection = function()
+					local selection = state.get_selected_entry(prompt_bufnr)
+					actions.close(prompt_bufnr)
+					local job = jobs_list[selection.index]
+					background_jobs[job_id].watch = true
+				end
+
 				map("i", "<CR>", kill_job)
 				map("n", "<CR>", kill_job)
+				map("i", "<C-w>", watch_selection)
+				map("n", "<C-w>", watch_selection)
 
 				return true
 			end,
