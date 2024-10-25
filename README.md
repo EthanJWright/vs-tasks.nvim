@@ -21,7 +21,7 @@ Short Demo
 
 ![Short Demo](https://i.imgur.com/sQtRQdO.gif)
 
-## Setup and usage
+## Setup
 
 With Plug:
 
@@ -68,12 +68,21 @@ nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
 nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
 ```
 
-_Note:_ When the task telescope is open:
+## Usage
+
+### When the task telescope is open
 
 - Enter will open in toggleterm
 - Ctrl-v will open in a vertical split terminal
 - Ctrl-p will open in a split terminal
-- Ctrl-b will run the task in the background
+- Ctrl-b will run the task as a job in the background
+- Ctrl-w will run the task as as a job in the background, and watch the file
+
+### When the jobs telescope is open
+
+- Enter will open any output in a temporary buffer
+- Ctrl-w will toggle the watch status
+- Ctrl-k will kill the job
 
 ### Autodetect
 
