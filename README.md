@@ -9,7 +9,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
   - source from ./vscode/tasks.json
   - source from package.json scripts
 - 👀 Run any task as a watched job
-- 🧵 Run any task in the background
+- 🧵 Run any task in the background as a job
 - 📖 Browse history of completed background jobs
 - ✏️ edit input variables that will be used for the session
 - Use VS Code's [variables](https://code.visualstudio.com/docs/editor/variables-reference) in the command (limited support, see desired features)

@@ -12,8 +12,8 @@ local Mappings = {
 	split = "<C-p>",
 	tab = "<C-t>",
 	current = "<CR>",
-	background = "<C-b>",
-	watch = "<C-w>",
+	background_job = "<C-b>",
+	watch_job = "<C-w>",
 }
 
 local command_history = {}
@@ -319,8 +319,8 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		formatted_command.command = Parse.Build_launch(formatted_command.command, args)
 	end
 
-	if direction == "background" or direction == "watch" then
-		process_command_background(label, formatted_command.command, false, direction == "watch")
+	if direction == "background_job" or direction == "watch_job" then
+		process_command_background(label, formatted_command.command, false, direction == "watch_job")
 	else
 		process_command(formatted_command.command, direction, Term_opts)
 		if direction ~= "current" then
@@ -421,8 +421,8 @@ local function tasks(opts)
 						vertical = Mappings.vertical,
 						horizontal = Mappings.split,
 						tab = Mappings.tab,
-						background = Mappings.background,
-						watch = Mappings.watch,
+						background_job = Mappings.background_job,
+						watch_job = Mappings.watch_job,
 					}
 
 					for direction, mapping in pairs(directions) do
