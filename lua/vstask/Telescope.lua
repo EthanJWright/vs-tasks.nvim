@@ -146,7 +146,7 @@ end
 local process_command_background = function(label, command, silent, watch)
 	local function notify(msg, level)
 		if not silent then
-			vim.notify(msg, level)
+			vim.notify(msg, level, { title = "vs-tasks" })
 		end
 	end
 
@@ -201,25 +201,21 @@ local process_command_background = function(label, command, silent, watch)
 			end
 		end,
 		on_exit = function(_, exit_code)
-			if background_jobs[job_id].watch == true then
+			local job = background_jobs[job_id]
+
+			if exit_code == 0 then
+				notify("🟢 Background job completed successfully : " .. job.label, vim.log.levels.INFO)
+			else
+				notify("🔴 Background job failed." .. job.label, vim.log.levels.ERROR)
+				quickfix.toquickfix(table.concat(output, "\n"))
+			end
+
+			if job.watch == true then
 				background_jobs[job_id].end_time = os.time()
 				background_jobs[job_id].exit_code = exit_code
 				return
 			end
 
-			if exit_code == 0 then
-				notify("Background job completed: " .. command, vim.log.levels.INFO)
-			else
-				local error_msg = table.concat(output, "\n")
-				notify("Background job failed: " .. command .. "\nOutput:\n" .. error_msg, vim.log.levels.ERROR)
-			end
-
-			-- Handle quickfix notification
-			if exit_code ~= 0 then
-				quickfix.toquickfix(table.concat(output, "\n"))
-			end
-
-			local job = background_jobs[job_id]
 			table.insert(job_history, {
 				label = job.label,
 				end_time = os.time(),
@@ -531,7 +527,7 @@ local function restart_watched_jobs()
 				background_jobs[job_id] = nil
 
 				-- Job is confirmed stopped, start new one
-				process_command_background(job_info.label, command, true, true)
+				process_command_background(job_info.label, command, false, true)
 			else
 				vim.notify(string.format("Job %d is still running, skipping restart", job_id), vim.log.levels.INFO)
 			end
