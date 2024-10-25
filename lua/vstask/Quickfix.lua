@@ -23,10 +23,7 @@ function M.toquickfix(output)
 		local quickFixCount = #qf_entries
 
 		if quickFixCount > 0 then
-			vim.notify("TypeScript errors found.", vim.log.levels.WARN, { title = "Build" })
 			vim.cmd("copen")
-		else
-			vim.notify("No errors found", vim.log.levels.INFO, { title = "Build" })
 		end
 	end)
 end
