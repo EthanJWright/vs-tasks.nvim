@@ -33,14 +33,14 @@ end
 ---@param parser function Parser to use
 ---@returns table json_obj Decoded JSON object
 local json_decode = function(filepath, parser)
-  local Parser = parser or vim.json.decode
-  local inputstr = readfile(filepath)
-  local ok, result = pcall(Parser, inputstr)
-  if ok then
-    return result
-  else
-    return nil, result
-  end
+	local Parser = parser or vim.json.decode
+	local inputstr = readfile(filepath)
+	local ok, result = pcall(Parser, inputstr)
+	if ok then
+		return result
+	else
+		return nil, result
+	end
 end
 
 --- load settings from JSON file
@@ -48,23 +48,23 @@ end
 ---@param parser function the parser to use
 ---@return boolean? is_error if error then true
 local load_setting_json = function(path, parser)
-  vim.validate {
-    path = { path, 's' },
-  }
+	vim.validate({
+		path = { path, "s" },
+	})
 
-  if vim.fn.filereadable(path) == 0 then
-    print("Invalid file path.")
-    return
-  end
+	if vim.fn.filereadable(path) == 0 then
+		print("Invalid file path.")
+		return
+	end
 
-  local decoded, err = json_decode(path, parser)
-  if err ~= nil then
-    print(err)
-    return
-  end
-  return decoded
+	local decoded, err = json_decode(path, parser)
+	if err ~= nil then
+		vim.notify("Error parsing JSON, perhaps your json_parser in your config is incorrect? " .. err)
+		return
+	end
+	return decoded
 end
 
 return {
-  load_json = load_setting_json
+	load_json = load_setting_json,
 }

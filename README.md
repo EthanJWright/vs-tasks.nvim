@@ -136,7 +136,7 @@ require("vstask").setup({
       direction = 'tab',
     }
   },
-  json_parser = 'vim.fn.json.decode'
+  json_parser = vim.json.decode
 })
 EOF
 ```

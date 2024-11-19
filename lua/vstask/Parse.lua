@@ -36,7 +36,7 @@ local set_cache_strategy = function(strategy)
 	CACHE_STRATEGY = strategy
 end
 
-local JSON_PARSER
+local JSON_PARSER = vim.json.decode
 --- Set JSON Parser
 ---@param json_parser function that takes inputstr
 local set_json_parser = function(json_parser)
@@ -63,7 +63,7 @@ local function get_inputs()
 	end
 	local path = vim.fn.getcwd() .. "/" .. config_dir .. "/tasks.json"
 	if not file_exists(path) then
-		vim.notify(MISSING_FILE_MESSAGE, "error")
+		vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
 		return {}
 	end
 	local config = Config.load_json(path, JSON_PARSER)
