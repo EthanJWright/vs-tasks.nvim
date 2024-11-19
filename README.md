@@ -84,7 +84,7 @@ nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
 
 - Enter will open any output in a temporary buffer
 - Ctrl-w will toggle the watch status
-- Ctrl-k will kill the job
+- Ctrl-d will kill the job (j and k reserved for navigation)
 
 ### Autodetect
 
