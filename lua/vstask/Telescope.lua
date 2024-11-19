@@ -66,17 +66,8 @@ local function format_command(pre, options)
 end
 
 local function set_mappings(new_mappings)
-	if new_mappings.vertical ~= nil then
-		Mappings.vertical = new_mappings.vertical
-	end
-	if new_mappings.split ~= nil then
-		Mappings.split = new_mappings.split
-	end
-	if new_mappings.tab ~= nil then
-		Mappings.tab = new_mappings.tab
-	end
-	if new_mappings.current ~= nil then
-		Mappings.current = new_mappings.current
+	for key, value in pairs(new_mappings) do
+		Mappings[key] = value
 	end
 end
 
@@ -203,6 +194,10 @@ local process_command_background = function(label, command, silent, watch)
 		end,
 		on_exit = function(_, exit_code)
 			local job = background_jobs[job_id]
+
+			if job == nil then
+				return
+			end
 
 			if exit_code == 0 then
 				notify("🟢 Background job completed successfully : " .. job.label, vim.log.levels.INFO)
@@ -418,6 +413,10 @@ local function tasks(opts)
 	opts = opts or {}
 
 	local task_list = Parse.Tasks()
+	if task_list == nil then
+		vim.notify("No tasks found", vim.log.levels.INFO)
+		return
+	end
 
 	if vim.tbl_isempty(task_list) then
 		return
