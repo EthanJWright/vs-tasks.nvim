@@ -15,6 +15,7 @@ local Mappings = {
 	current = "<CR>",
 	background_job = "<C-b>",
 	watch_job = "<C-w>",
+	kill_job = "<C-d>",
 }
 
 local command_history = {}
@@ -648,14 +649,14 @@ local function background_jobs_list(opts)
 					open_job_output(output, job.id, "vertical")
 				end
 
-				map("i", "<C-k>", kill_job)
-				map("n", "<C-k>", kill_job)
-				map("i", "<CR>", open_history)
-				map("n", "<CR>", open_history)
-				map("i", "<C-v>", open_in_temp_buffer_vertical)
-				map("n", "<C-v>", open_in_temp_buffer_vertical)
-				map("i", "<C-w>", toggle_watch_binding)
-				map("n", "<C-w>", toggle_watch_binding)
+				map("i", Mappings.kill_job, kill_job)
+				map("n", Mappings.kill_job, kill_job)
+				map("i", Mappings.current, open_history)
+				map("n", Mappings.current, open_history)
+				map("i", Mappings.split, open_in_temp_buffer_vertical)
+				map("n", Mappings.split, open_in_temp_buffer_vertical)
+				map("i", Mappings.watch_job, toggle_watch_binding)
+				map("n", Mappings.watch_job, toggle_watch_binding)
 
 				return true
 			end,
@@ -716,10 +717,10 @@ local function job_history_list(opts)
 					vim.api.nvim_win_set_buf(0, buf)
 				end
 
-				map("i", "<CR>", open_in_temp_buffer)
-				map("n", "<CR>", open_in_temp_buffer)
-				map("i", "<C-v>", open_in_temp_buffer_vertical)
-				map("n", "<C-v>", open_in_temp_buffer_vertical)
+				map("i", Mappings.current, open_in_temp_buffer)
+				map("n", Mappings.current, open_in_temp_buffer)
+				map("i", Mappings.vertical, open_in_temp_buffer_vertical)
+				map("n", Mappings.vertical, open_in_temp_buffer_vertical)
 
 				return true
 			end,

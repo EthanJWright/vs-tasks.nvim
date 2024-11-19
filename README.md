@@ -113,7 +113,8 @@ require("vstask").setup({
     tab = '<C-t>',
     current = '<CR>',
     background = '<C-b>',
-    watch = '<C-w>',
+    watch_job = '<C-w>',
+    kill_job = '<C-d>',
   },
   autodetect = { -- auto load scripts
     npm = "on"
