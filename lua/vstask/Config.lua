@@ -18,13 +18,13 @@
 ---@return file*?
 ---@return string? errmsg
 local readfile = function(filePath, mode)
-  mode = vim.F.if_nil(mode, "r")
-  local file = io.open(filePath, "r")
-  if file then
-    local data = file:read "*a"
-    file.close()
-    return data
-  end
+	mode = vim.F.if_nil(mode, "r")
+	local file = io.open(filePath, "r")
+	if file then
+		local data = file:read("*a")
+		file.close()
+		return data
+	end
 end
 
 --- Decodes from JSON.
