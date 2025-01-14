@@ -16,6 +16,7 @@ local Mappings = {
 	background_job = "<C-b>",
 	watch_job = "<C-w>",
 	kill_job = "<C-d>",
+	run = "<C-r>",
 }
 
 local command_history = {}
@@ -318,7 +319,18 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 	actions.close(prompt_bufnr)
 
 	local command, options, label, args
-	if is_launch then
+
+	if selection == nil or direction == "run" then
+		if direction == "run" then
+			direction = "current"
+		end
+		local current_line = state.get_current_line()
+		command = current_line
+		options = nil
+		label = "CMD: " .. current_line
+		args = nil
+		set_history(label, command, options)
+	elseif is_launch then
 		command = selection_list[selection.index]["program"]
 		options = selection_list[selection.index]["options"]
 		label = selection_list[selection.index]["name"]
@@ -413,12 +425,17 @@ local function tasks(opts)
 	opts = opts or {}
 
 	local task_list = Parse.Tasks()
+
+	if opts.run_empty then
+		task_list = {}
+	end
+
 	if task_list == nil then
 		vim.notify("No tasks found", vim.log.levels.INFO)
 		return
 	end
 
-	if vim.tbl_isempty(task_list) then
+	if vim.tbl_isempty(task_list) and opts.run_empty ~= true then
 		return
 	end
 
@@ -445,6 +462,7 @@ local function tasks(opts)
 						tab = Mappings.tab,
 						background_job = Mappings.background_job,
 						watch_job = Mappings.watch_job,
+						run = Mappings.run,
 					}
 
 					for direction, mapping in pairs(directions) do
@@ -461,6 +479,12 @@ local function tasks(opts)
 			end,
 		})
 		:find()
+end
+
+local function tasks_empty(opts)
+	opts = opts or {}
+	opts.run_empty = true
+	tasks(opts)
 end
 
 local function launches(opts)
@@ -730,6 +754,7 @@ end
 return {
 	Launch = launches,
 	Tasks = tasks,
+	Tasks_empty = tasks_empty,
 	Inputs = inputs,
 	History = history,
 	Jobs = background_jobs_list,

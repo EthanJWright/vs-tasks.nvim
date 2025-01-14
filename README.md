@@ -15,6 +15,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 - Use VS Code's [variables](https://code.visualstudio.com/docs/editor/variables-reference) in the command (limited support, see desired features)
 - Use VS Code's [launch.json](https://code.visualstudio.com/docs/editor/debugging#_launch-configurations) pattern (limited support)
 - ⟳ Run tasks from your history, sorted by most used
+- 🐚 run shell commands with .run() or <C-r>
 
 ## Example
 
@@ -79,6 +80,7 @@ nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
 - Ctrl-p will open in a split terminal
 - Ctrl-b will run the task as a job in the background
 - Ctrl-w will run the task as as a job in the background, and watch the file
+- Ctrl-r will take what ever input you typed and run it as a command
 
 ### When the jobs telescope is open
 
@@ -113,11 +115,12 @@ require("vstask").setup({
     background = '<C-b>',
     watch_job = '<C-w>',
     kill_job = '<C-d>',
+    run = '<C-r>',
   },
   autodetect = { -- auto load scripts
     npm = "on"
   },
-  terminal = 'toggleterm',
+  terminal = 'nvim',-- can be 'nvim' or 'toggleterm'
   term_opts = {
     vertical = {
       direction = "vertical",
@@ -213,6 +216,7 @@ lua require("telescope").extensions.vstask.inputs() -- open the input list, set 
 lua require("telescope").extensions.vstask.history() -- search history of tasks
 lua require("telescope").extensions.vstask.close() -- close the task runner (if toggleterm)
 lua require("telescope").extensions.vstask.jobs() -- view and manage background tasks (Enter to kill)
+lua require("telescope").extensions.vstask.run() -- open menu to type cli cmd and run it with standard bindings
 ```
 
 You can also configure themes and pass options to the picker
