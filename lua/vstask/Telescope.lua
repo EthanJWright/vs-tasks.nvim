@@ -623,6 +623,11 @@ local function background_jobs_list(opts)
 		return
 	end
 
+	-- Sort jobs_list by start_time (most recent first)
+	table.sort(jobs_list, function(a, b)
+		return a.start_time > b.start_time
+	end)
+
 	pickers
 		.new(opts, {
 			prompt_title = "Background Jobs",
@@ -700,6 +705,11 @@ local function job_history_list(opts)
 	for _, job_info in ipairs(job_history) do
 		table.insert(jobs_formatted, format_job_entry(job_info, false))
 	end
+
+	-- Sort jobs_list by start_time (most recent first)
+	table.sort(jobs_formatted, function(a, b)
+		return a.start_time > b.start_time
+	end)
 
 	pickers
 		.new(opts, {
