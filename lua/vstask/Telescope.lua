@@ -280,11 +280,20 @@ local function inputs(opts)
 	local selection_list = {}
 
 	for _, input_dict in pairs(input_list) do
+		local description = "set input"
+		if input_dict["command"] == "extension.commandvariable.pickStringRemember" then
+			description = "pick input from set list"
+		end
+
+		if input_dict["description"] ~= nil then
+			description = input_dict["description"]
+		end
+
 		local add_current = ""
 		if input_dict["value"] ~= "" then
 			add_current = " [" .. input_dict["value"] .. "] "
 		end
-		local current_task = input_dict["id"] .. add_current .. " => " .. input_dict["description"]
+		local current_task = input_dict["id"] .. add_current .. " => " .. description
 		table.insert(inputs_formatted, current_task)
 		table.insert(selection_list, input_dict)
 	end
@@ -302,7 +311,7 @@ local function inputs(opts)
 					actions.close(prompt_bufnr)
 
 					local input = selection_list[selection.index]["id"]
-					Parse.Set(input)
+					Parse.Set(input, opts)
 				end
 
 				map("i", "<CR>", start_task)

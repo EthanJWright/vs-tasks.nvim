@@ -5,12 +5,38 @@
       "description": "Some term",
       "id": "phrase",
       "type": "promptString"
+    },
+    {
+      "type": "command",
+      "id": "cowsay",
+      "command": "extension.commandvariable.pickStringRemember",
+      "args": {
+        "description": "what type of cow?",
+        "options": [
+          ["normal cow", "mooooo"],
+          ["imposture", "bark bark"]
+        ],
+        "default": "",
+        "fileName": "${workspaceFolder}/foo-bar.txt",
+        "pattern": {
+          "regexp": "^\\s*(?!#)([^=]+?)\\s*=\\s*(?:(\\{.+\\})|(.+))$",
+          "label": "$1",
+          "json": "$2",
+          "value": "$3"
+        }
+      }
     }
   ],
   "tasks": [
     {
       "command": "echo ${input:phrase} | cowsay",
       "label": "🐮 Cowsay",
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
+      "command": "echo ${input:cowsay} | cowsay",
+      "label": "🐮 Cowsay with arg list",
       "problemMatcher": [],
       "type": "shell"
     },

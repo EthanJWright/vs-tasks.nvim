@@ -269,17 +269,71 @@ local function get_input_variables(command)
 	return input_variables, count
 end
 
-local function load_input_variable(input)
-	local input_val = vim.fn.input(input .. "=", "")
-	if input_val == "clear" then
-		Inputs[input]["value"] = nil
-	else
-		if Inputs[input] == nil then
-			Inputs[input] = { "value", nil }
-		end
-		Inputs[input]["value"] = input_val
-		Inputs[input]["id"] = input
-	end
+local function load_input_variable(input, opts)
+    -- Get the input configuration
+    local input_config = nil
+    for _, cfg in pairs(Inputs) do
+        if cfg.id == input then
+            input_config = cfg
+            break
+        end
+    end
+
+    -- Handle pickStringRemember command type
+    if input_config and input_config.type == "command" and input_config.command == "extension.commandvariable.pickStringRemember" then
+        vim.notify("about to build description", vim.log.levels.INFO)
+        local pickers = require("telescope.pickers")
+        local finders = require("telescope.finders")
+        local conf = require("telescope.config").values
+        local actions = require("telescope.actions")
+        local action_state = require("telescope.actions.state")
+
+        -- Extract options from args
+        local options = input_config.args.options or {}
+        local description = input_config.args.description or "Select an option:"
+
+        pickers.new(opts, {
+            prompt_title = description,
+            finder = finders.new_table {
+                results = options,
+                entry_maker = function(entry)
+                    return {
+                        value = entry[2],
+                        display = entry[1],
+                        ordinal = entry[1],
+                    }
+                end,
+            },
+            sorter = conf.generic_sorter({}),
+            attach_mappings = function(prompt_bufnr, _)
+                actions.select_default:replace(function()
+                    actions.close(prompt_bufnr)
+                    local selection = action_state.get_selected_entry()
+                    if selection then
+                        if Inputs[input] == nil then
+                            Inputs[input] = {}
+                        end
+                        Inputs[input].value = selection.value
+                        Inputs[input].id = input
+                    end
+                end)
+                return true
+            end,
+        }):find()
+        return
+    end
+
+    -- Handle regular input types
+    local input_val = vim.fn.input(input .. "=", "")
+    if input_val == "clear" then
+        Inputs[input]["value"] = nil
+    else
+        if Inputs[input] == nil then
+            Inputs[input] = { "value", nil }
+        end
+        Inputs[input]["value"] = input_val
+        Inputs[input]["id"] = input
+    end
 end
 
 local function get_predefined_variables(command)
