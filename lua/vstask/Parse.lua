@@ -58,7 +58,7 @@ local function setContains(set, key)
 end
 
 local function get_inputs()
-	if Inputs ~= nil then
+	if Inputs ~= nil and next(Inputs) ~= nil then
 		return Inputs
 	end
 	local path = vim.fn.getcwd() .. "/" .. config_dir .. "/tasks.json"
@@ -67,19 +67,25 @@ local function get_inputs()
 		return {}
 	end
 	local config = Config.load_json(path, JSON_PARSER)
-	if not setContains(config, "inputs") then
+	if config == nil or config["inputs"] == nil then
 		Inputs = {}
 		return Inputs
 	end
 
 	local inputs = config["inputs"]
 	for _, input_dict in pairs(inputs) do
-		if Inputs[input_dict["id"]] == nil then
-			Inputs[input_dict["id"]] = input_dict
-			if Inputs[input_dict["id"]] == nil or Inputs[input_dict["id"]]["value"] == nil then
-				Inputs[input_dict["id"]]["value"] = input_dict["default"]
-			end
+		local input_id = input_dict["id"]
+		-- Skip if input already exists
+		if Inputs[input_id] ~= nil then
+			goto continue
 		end
+
+		-- Create new input entry
+		Inputs[input_id] = input_dict
+		-- Set value to default if provided, otherwise empty string
+		Inputs[input_id]["value"] = input_dict["default"] or ""
+
+		::continue::
 	end
 	return Inputs
 end
