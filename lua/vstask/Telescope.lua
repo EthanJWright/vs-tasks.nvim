@@ -59,6 +59,7 @@ local function format_command(pre, options)
 		end
 	end
 	command = Parse.replace(command)
+	vim.notify("here", vim.log.levels.INFO)
 	return {
 		pre = pre,
 		command = command,

@@ -288,6 +288,9 @@ local function load_input_variable(input, opts)
         local actions = require("telescope.actions")
         local action_state = require("telescope.actions.state")
 
+        -- Create a flag to track selection completion
+        local selection_done = false
+
         -- Extract options from args
         local options = input_config.args.options or {}
         local description = input_config.args.description or "Select an option:"
@@ -315,11 +318,17 @@ local function load_input_variable(input, opts)
                         end
                         Inputs[input].value = selection.value
                         Inputs[input].id = input
-                    end
-                end)
-                return true
-            end,
-        }):find()
+                    -- Mark selection as complete
+                    selection_done = true
+                                        end
+                                    end)
+                                    return true
+                                end,
+                            }):find()
+                            -- Wait for selection to complete
+                            vim.wait(10000, function()
+                                return selection_done
+                            end, 100)
         return
     end
 
