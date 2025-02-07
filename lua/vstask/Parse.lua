@@ -361,15 +361,7 @@ local function get_predefined_variables(command)
 	return predefined_vars, count
 end
 
-local get_missing_inputs_from_user = function(missing)
-  for _, input in pairs(missing) do
-    load_input_variable(input["id"])
-  end
-end
-
-local extract_variables = function(command, inputs)
-	local input_vars = get_input_variables(command)
-	local predefined_vars = get_predefined_variables(command)
+local find_missing_inputs = function(inputs, input_vars)
 	local missing = {}
 	for _, input_var in pairs(input_vars) do
 		local found = false
@@ -382,8 +374,26 @@ local extract_variables = function(command, inputs)
 			table.insert(missing, input_var)
 		end
 	end
-  get_missing_inputs_from_user(missing)
-	return input_vars, predefined_vars
+  return missing
+end
+
+local get_missing_inputs_from_user = function(missing)
+  for _, input in pairs(missing) do
+    load_input_variable(input["id"])
+  end
+end
+
+local get_existing_variables = function(command)
+	local input_vars = get_input_variables(command)
+	local predefined_vars = get_predefined_variables(command)
+  return input_vars, predefined_vars
+end
+
+local extract_variables = function(command, inputs)
+  local input_vars, predefined_vars = get_existing_variables(command)
+  local missing = find_missing_inputs(inputs, input_vars)
+  -- this gets user input
+	return input_vars, predefined_vars, missing
 end
 
 local function replace_input_vars(input_vars, inputs, command)
@@ -414,7 +424,8 @@ end
 
 local function replace_vars_in_command(command)
 	local inputs = get_inputs()
-	local input_vars, predefined_vars = extract_variables(command, inputs)
+	local input_vars, predefined_vars, missing = extract_variables(command, inputs)
+  get_missing_inputs_from_user(missing)
   command = command_replacements(input_vars, inputs, predefined_vars, command)
 	return command
 end
