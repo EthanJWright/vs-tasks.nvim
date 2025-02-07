@@ -318,7 +318,7 @@ local function inputs(opts)
 		:find()
 end
 
-local function handle_direction(direction, prompt_bufnr, selection_list, is_launch)
+local function handle_direction(direction, prompt_bufnr, selection_list, is_launch, opts)
 	local selection = state.get_selected_entry(prompt_bufnr)
 	actions.close(prompt_bufnr)
 
@@ -364,16 +364,16 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 				vim.cmd("normal! G")
 			end
 		end
-		Parse.replace_and_run(cleaned, process)
+		Parse.replace_and_run(cleaned, process, opts)
 	end
 end
 
-local function start_launch_direction(direction, prompt_bufnr, _, selection_list)
-	handle_direction(direction, prompt_bufnr, selection_list, true)
+local function start_launch_direction(direction, prompt_bufnr, _, selection_list, opts)
+	handle_direction(direction, prompt_bufnr, selection_list, true, opts)
 end
 
-local function start_task_direction(direction, prompt_bufnr, _, selection_list)
-	handle_direction(direction, prompt_bufnr, selection_list, false)
+local function start_task_direction(direction, prompt_bufnr, _, selection_list, opts)
+	handle_direction(direction, prompt_bufnr, selection_list, false, opts)
 end
 
 local function history(opts)
@@ -405,16 +405,16 @@ local function history(opts)
 			sorter = sorters.get_generic_fuzzy_sorter(),
 			attach_mappings = function(prompt_bufnr, map)
 				local function start_task()
-					start_task_direction("current", prompt_bufnr, map, sorted_history)
+					start_task_direction("current", prompt_bufnr, map, sorted_history, opts)
 				end
 				local function start_task_vertical()
-					start_task_direction("vertical", prompt_bufnr, map, sorted_history)
+					start_task_direction("vertical", prompt_bufnr, map, sorted_history, opts)
 				end
 				local function start_task_split()
-					start_task_direction("horizontal", prompt_bufnr, map, sorted_history)
+					start_task_direction("horizontal", prompt_bufnr, map, sorted_history, opts)
 				end
 				local function start_task_tab()
-					start_task_direction("tab", prompt_bufnr, map, sorted_history)
+					start_task_direction("tab", prompt_bufnr, map, sorted_history, opts)
 				end
 				map("i", Mappings.current, start_task)
 				map("n", Mappings.current, start_task)
@@ -476,7 +476,7 @@ local function tasks(opts)
 
 					for direction, mapping in pairs(directions) do
 						local handler = function()
-							direction_handler(direction, prompt_bufnr, map, task_list)
+							direction_handler(direction, prompt_bufnr, map, task_list, opts)
 						end
 						map("i", mapping, handler)
 						map("n", mapping, handler)

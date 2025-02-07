@@ -424,7 +424,6 @@ local get_inputs_and_run = function(input_vars, inputs, predefined_vars, missing
     local run_callback = function()
       if missing_length == index then
         local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
-        vim.notify("Running: " .. command, vim.log.levels.INFO)
         fetched_missing = true
         callback(command)
       end
@@ -498,10 +497,10 @@ local function get_launches()
 end
 
 -- Function to replace variables and execute callback
-local function replace_and_run(command, callback)
+local function replace_and_run(command, callback, opts)
   local inputs = get_inputs()
 	local input_vars, predefined_vars, missing = extract_variables(command, inputs)
-  get_inputs_and_run(input_vars, inputs, predefined_vars, missing, command, callback)
+  get_inputs_and_run(input_vars, inputs, predefined_vars, missing, command, callback, opts)
 end
 
 return {
