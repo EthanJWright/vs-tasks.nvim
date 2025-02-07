@@ -21,15 +21,20 @@
   ],
   "tasks": [
     {
-      "command": "echo 'hello' > /tmp/tmp.txt",
-      "label": "subtask",
+      "command": "sleep 1 ; echo 'hello from subtask 1' > /tmp/tmp.txt",
+      "label": "subtask 1",
+      "type": "shell"
+    },
+    {
+      "command": "sleep 1 ; echo 'hello from subtask 2' >> /tmp/tmp.txt",
+      "label": "subtask 2",
       "type": "shell"
     },
     {
       "command": "cat /tmp/tmp.txt",
-      "lable": "hello from subtask",
+      "label": "hello from subtask",
       "type": "shell",
-      "dependsOn": ["subtask"]
+      "dependsOn": ["subtask 1", "subtask 2"]
     },
     {
       "command": "echo ${input:phrase} | cowsay",

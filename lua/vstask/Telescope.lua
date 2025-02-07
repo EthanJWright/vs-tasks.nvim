@@ -23,6 +23,7 @@ local command_history = {}
 local background_jobs = {}
 local job_history = {}
 local live_output_buffers = {} -- Track buffers showing live job output
+local task_queue = {}
 
 local process_command_background = function(label, command, silent, watch, on_complete)
 	local function notify(msg, level)
@@ -95,20 +96,25 @@ local process_command_background = function(label, command, silent, watch, on_co
 				quickfix.toquickfix(table.concat(output, "\n"))
 			end
 
-			if job.watch == true then
-				background_jobs[job_id].end_time = os.time()
-				background_jobs[job_id].exit_code = exit_code
-				return
-			end
+			-- Always record end time and exit code
+			background_jobs[job_id].end_time = os.time()
+			background_jobs[job_id].exit_code = exit_code
 
-			table.insert(job_history, {
-				label = job.label,
-				end_time = os.time(),
-				start_time = job.start_time,
-				exit_code = exit_code,
-				output = job.output,
-			})
-			background_jobs[job_id] = nil
+			-- Add to history unless it's a watch job
+			if not job.watch then
+				vim.notify("Adding to job history - " .. job.label, vim.log.levels.INFO)
+				table.insert(job_history, {
+					label = job.label,
+					end_time = os.time(),
+					start_time = job.start_time or os.time(), -- Ensure we always have a start_time
+					exit_code = exit_code,
+					output = job.output,
+				})
+				background_jobs[job_id] = nil
+			end
+			if on_complete ~= nil then
+				on_complete()
+			end
 		end,
 	})
 
@@ -177,35 +183,30 @@ end
 
 -- Run dependent tasks sequentially in background
 local function run_dependent_tasks(task, task_list, on_complete)
-	if not task.dependsOn then
-		on_complete()
-		return
-	end
-
 	local deps = type(task.dependsOn) == "string" and { task.dependsOn } or task.dependsOn
-	local completed_deps = 0
-	local total_deps = #deps
-
-	-- Function to check if all deps are done and run main task
-	local function check_deps()
-		completed_deps = completed_deps + 1
-		if completed_deps == total_deps then
-			on_complete()
-		end
-	end
 
 	-- Run each dependent task
 	for _, dep_label in ipairs(deps) do
 		local dep_task = find_task_by_label(dep_label, task_list)
 		if dep_task then
 			local command = clean_command(dep_task.command, dep_task.options)
-			-- Run the dependent task and increment counter when done
-			process_command_background(dep_task.label, command, true, false, check_deps)
+			task_queue[#task_queue + 1] = { label = dep_task.label, command = command }
 		else
 			vim.notify("Dependent task not found: " .. dep_label, vim.log.levels.ERROR)
-			check_deps() -- Count failed deps to avoid hanging
 		end
 	end
+	-- add the original task to the queue
+	task_queue[#task_queue + 1] = { label = task.label, command = clean_command(task.command, task.options) }
+
+	local function run_next_task()
+		if #task_queue == 0 then
+			vim.notify("All dependent tasks completed", vim.log.levels.INFO)
+			return
+		end
+		local next_task = table.remove(task_queue, 1)
+		process_command_background(next_task.label, next_task.command, false, false, run_next_task)
+	end
+	run_next_task()
 end
 
 local function set_mappings(new_mappings)
@@ -398,24 +399,25 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		cleaned = Parse.Build_launch(cleaned, args)
 	end
 
-	if direction == "background_job" or direction == "watch_job" then
-		-- Find the full task object
-		local task = nil
-		for _, t in ipairs(selection_list) do
-			if t.label == label then
-				task = t
-				break
-			end
+	-- Find the full task object
+	local task = nil
+	for _, t in ipairs(selection_list) do
+		if t.label == label then
+			task = t
+			break
 		end
+	end
 
-		-- If task has dependencies, run them first
-		if task and task.dependsOn then
-			run_dependent_tasks(task, selection_list, function()
-				process_command_background(label, cleaned, false, direction == "watch_job")
-			end)
-		else
+	if task and task.dependsOn then
+		run_dependent_tasks(task, selection_list, function()
 			process_command_background(label, cleaned, false, direction == "watch_job")
-		end
+		end)
+		return
+	end
+
+	if direction == "background_job" or direction == "watch_job" then
+		-- If task has dependencies, run them first
+		process_command_background(label, cleaned, false, direction == "watch_job")
 	else
 		local process = function(prepared_command)
 			process_command(prepared_command, direction, Term_opts)
@@ -763,21 +765,23 @@ end
 local function job_history_list(opts)
 	opts = opts or {}
 
-	local jobs_formatted = {}
-
 	if vim.tbl_isempty(job_history) then
 		vim.notify("No job history available", vim.log.levels.INFO)
 		return
 	end
 
-	for _, job_info in ipairs(job_history) do
-		table.insert(jobs_formatted, format_job_entry(job_info, false))
-	end
+	-- Create a copy of job_history to avoid modifying the original
+	local sorted_history = vim.deepcopy(job_history)
 
-	-- Sort jobs_list by start_time (most recent first)
-	table.sort(jobs_formatted, function(a, b)
+	-- Sort by start_time (most recent first)
+	table.sort(sorted_history, function(a, b)
 		return a.start_time > b.start_time
 	end)
+
+	local jobs_formatted = {}
+	for _, job_info in ipairs(sorted_history) do
+		table.insert(jobs_formatted, format_job_entry(job_info, false))
+	end
 
 	pickers
 		.new(opts, {
