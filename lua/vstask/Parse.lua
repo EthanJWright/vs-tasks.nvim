@@ -266,6 +266,7 @@ local function get_tasks()
 		end
 
 		for _, task in pairs(tasks["tasks"]) do
+      vim.notify("Task: " .. task.label, vim.log.levels.INFO)
 			table.insert(task_list, task)
 		end
 		::continue::

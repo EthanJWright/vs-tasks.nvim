@@ -21,6 +21,17 @@
   ],
   "tasks": [
     {
+      "command": "echo 'hello' > /tmp/tmp.txt",
+      "label": "subtask",
+      "type": "shell"
+    },
+    {
+      "command": "cat /tmp/tmp.txt",
+      "lable": "hello from subtask",
+      "type": "shell",
+      "dependsOn": ["subtask"]
+    },
+    {
       "command": "echo ${input:phrase} | cowsay",
       "label": "🐮 Cowsay",
       "problemMatcher": [],

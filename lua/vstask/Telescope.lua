@@ -24,114 +24,7 @@ local background_jobs = {}
 local job_history = {}
 local live_output_buffers = {} -- Track buffers showing live job output
 
-local function set_history(label, command, options)
-	if not command_history[label] then
-		command_history[label] = {
-			command = command,
-			options = options,
-			label = label,
-			hits = 1,
-		}
-	else
-		command_history[label].hits = command_history[label].hits + 1
-	end
-	Parse.Used_task(label)
-end
-
-local last_cmd = nil
-local Term_opts = {}
-
-local function set_term_opts(new_opts)
-	Term_opts = new_opts
-end
-
-local function get_last()
-	return last_cmd
-end
-
-local function clean_command(pre, options)
-	local command = pre
-	if type(options) == "table" then
-		local cwd = options["cwd"]
-		if type(cwd) == "string" then
-			local cd_command = string.format("cd %s", cwd)
-			command = string.format("%s && %s", cd_command, command)
-		end
-	end
-	return command
-end
-
-local function set_mappings(new_mappings)
-	for key, value in pairs(new_mappings) do
-		Mappings[key] = value
-	end
-end
-
-local function toggle_watch(id)
-	background_jobs[id].watch = not background_jobs[id].watch
-end
-
-local function preview_job_output(output, bufnr, job_id)
-	local max_lines = 1000 -- Show last 1000 lines
-	local start_idx = #output > max_lines and #output - max_lines or 0
-	local recent_output = vim.list_slice(output, start_idx + 1)
-	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, recent_output)
-	vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
-	-- Scroll to bottom of preview
-	vim.schedule(function()
-		local win = vim.fn.bufwinid(bufnr)
-		if win ~= -1 then
-			vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(bufnr), 0 })
-			vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
-		end
-	end)
-
-	-- Set up live updates for preview if job is running
-	if job_id then
-		local job = background_jobs[job_id]
-		if job then
-			-- Create autocmd to update preview buffer
-			vim.api.nvim_create_autocmd("User", {
-				pattern = "VsTaskJobOutput",
-				callback = function()
-					if vim.api.nvim_buf_is_valid(bufnr) then
-						preview_job_output(job.output, bufnr)
-					end
-				end,
-			})
-		end
-	end
-end
-local function open_job_output(output, job_id, direction)
-	local buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
-
-	if direction == "vertical" then
-		vim.cmd("vsplit")
-	end
-
-	vim.api.nvim_win_set_buf(0, buf)
-	vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
-
-	-- Set buffer name to indicate live status
-	if job_id then
-		local job = background_jobs[job_id]
-		if job then
-			vim.api.nvim_buf_set_name(buf, string.format("Job Output - %s (Live)", job.label))
-			live_output_buffers[job_id] = buf
-
-			-- Set buffer local autocmd to clean up when buffer is closed
-			vim.api.nvim_create_autocmd("BufWipeout", {
-				buffer = buf,
-				callback = function()
-					live_output_buffers[job_id] = nil
-				end,
-			})
-		end
-	end
-end
-
-local process_command_background = function(label, command, silent, watch)
+local process_command_background = function(label, command, silent, watch, on_complete)
 	local function notify(msg, level)
 		if not silent then
 			vim.notify(msg, level, { title = "vs-tasks" })
@@ -232,6 +125,156 @@ local process_command_background = function(label, command, silent, watch)
 			end_time = 0,
 			exit_code = -1,
 		}
+	end
+end
+
+local function clean_command(pre, options)
+	local command = pre
+	if type(options) == "table" then
+		local cwd = options["cwd"]
+		if type(cwd) == "string" then
+			local cd_command = string.format("cd %s", cwd)
+			command = string.format("%s && %s", cd_command, command)
+		end
+	end
+	return command
+end
+
+local function set_history(label, command, options)
+	if not command_history[label] then
+		command_history[label] = {
+			command = command,
+			options = options,
+			label = label,
+			hits = 1,
+		}
+	else
+		command_history[label].hits = command_history[label].hits + 1
+	end
+	Parse.Used_task(label)
+end
+
+local last_cmd = nil
+local Term_opts = {}
+
+local function set_term_opts(new_opts)
+	Term_opts = new_opts
+end
+
+local function get_last()
+	return last_cmd
+end
+
+-- Helper function to find a task by label
+local function find_task_by_label(label, task_list)
+	for _, task in ipairs(task_list) do
+		if task.label == label then
+			return task
+		end
+	end
+	return nil
+end
+
+-- Run dependent tasks sequentially in background
+local function run_dependent_tasks(task, task_list, on_complete)
+	if not task.dependsOn then
+		on_complete()
+		return
+	end
+
+	local deps = type(task.dependsOn) == "string" and { task.dependsOn } or task.dependsOn
+	local completed_deps = 0
+	local total_deps = #deps
+
+	-- Function to check if all deps are done and run main task
+	local function check_deps()
+		completed_deps = completed_deps + 1
+		if completed_deps == total_deps then
+			on_complete()
+		end
+	end
+
+	-- Run each dependent task
+	for _, dep_label in ipairs(deps) do
+		local dep_task = find_task_by_label(dep_label, task_list)
+		if dep_task then
+			local command = clean_command(dep_task.command, dep_task.options)
+			-- Run the dependent task and increment counter when done
+			process_command_background(dep_task.label, command, true, false, check_deps)
+		else
+			vim.notify("Dependent task not found: " .. dep_label, vim.log.levels.ERROR)
+			check_deps() -- Count failed deps to avoid hanging
+		end
+	end
+end
+
+local function set_mappings(new_mappings)
+	for key, value in pairs(new_mappings) do
+		Mappings[key] = value
+	end
+end
+
+local function toggle_watch(id)
+	background_jobs[id].watch = not background_jobs[id].watch
+end
+
+local function preview_job_output(output, bufnr, job_id)
+	local max_lines = 1000 -- Show last 1000 lines
+	local start_idx = #output > max_lines and #output - max_lines or 0
+	local recent_output = vim.list_slice(output, start_idx + 1)
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, recent_output)
+	vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
+	-- Scroll to bottom of preview
+	vim.schedule(function()
+		local win = vim.fn.bufwinid(bufnr)
+		if win ~= -1 then
+			vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(bufnr), 0 })
+			vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
+		end
+	end)
+
+	-- Set up live updates for preview if job is running
+	if job_id then
+		local job = background_jobs[job_id]
+		if job then
+			-- Create autocmd to update preview buffer
+			vim.api.nvim_create_autocmd("User", {
+				pattern = "VsTaskJobOutput",
+				callback = function()
+					if vim.api.nvim_buf_is_valid(bufnr) then
+						preview_job_output(job.output, bufnr)
+					end
+				end,
+			})
+		end
+	end
+end
+local function open_job_output(output, job_id, direction)
+	local buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
+
+	if direction == "vertical" then
+		vim.cmd("vsplit")
+	end
+
+	vim.api.nvim_win_set_buf(0, buf)
+	vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
+
+	-- Set buffer name to indicate live status
+	if job_id then
+		local job = background_jobs[job_id]
+		if job then
+			vim.api.nvim_buf_set_name(buf, string.format("Job Output - %s (Live)", job.label))
+			live_output_buffers[job_id] = buf
+
+			-- Set buffer local autocmd to clean up when buffer is closed
+			vim.api.nvim_create_autocmd("BufWipeout", {
+				buffer = buf,
+				callback = function()
+					live_output_buffers[job_id] = nil
+				end,
+			})
+		end
 	end
 end
 
@@ -356,7 +399,23 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 	end
 
 	if direction == "background_job" or direction == "watch_job" then
-		process_command_background(label, cleaned, false, direction == "watch_job")
+		-- Find the full task object
+		local task = nil
+		for _, t in ipairs(selection_list) do
+			if t.label == label then
+				task = t
+				break
+			end
+		end
+
+		-- If task has dependencies, run them first
+		if task and task.dependsOn then
+			run_dependent_tasks(task, selection_list, function()
+				process_command_background(label, cleaned, false, direction == "watch_job")
+			end)
+		else
+			process_command_background(label, cleaned, false, direction == "watch_job")
+		end
 	else
 		local process = function(prepared_command)
 			process_command(prepared_command, direction, Term_opts)
