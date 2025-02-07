@@ -8,6 +8,11 @@ local function set_cache_json_conf(value)
 	cache_json_conf = value
 end
 
+local function clear_inputs()
+  Inputs = {}
+  vim.notify("Inputs cleared", vim.log.levels.INFO)
+end
+
 local auto_detect = {
 	npm = "on",
 }
@@ -518,4 +523,5 @@ return {
 	Set_cache_json_conf = set_cache_json_conf,
 	Set_config_dir = set_config_dir,
 	Set_json_parser = set_json_parser,
+  Clear_inputs = clear_inputs,
 }
