@@ -379,7 +379,7 @@ end
 
 local get_missing_inputs_from_user = function(missing)
   for _, input in pairs(missing) do
-    load_input_variable(input["id"])
+    load_input_variable(input)
   end
 end
 
