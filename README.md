@@ -17,6 +17,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 - ⟳ Run tasks from your history, sorted by most used
 - 🐚 run shell commands with .run() or <C-r>
 - basic support for option picker for task input (similar to extension.commandvariable.pickStringRemember)
+- dependsOn and dependsOrder support, utilizing the background jobs feature. View with JobHistory and Jobs
 
 ## Example
 
@@ -231,6 +232,37 @@ In your project root set up `.vscode/tasks.json` (default config directory set t
       "label": "Arg Hello World",
       "problemMatcher": [],
       "type": "shell"
+    },
+    {
+      "command": "sleep 1 ; echo 'hello from subtask 1' > /tmp/tmp.txt",
+      "label": "subtask 1",
+      "type": "shell"
+    },
+    {
+      "command": "sleep 1 ; echo 'hello from subtask 2' >> /tmp/tmp.txt",
+      "label": "subtask 2",
+      "type": "shell"
+    },
+    {
+      "command": "cat /tmp/tmp.txt",
+      "label": "hello from subtask",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": ["subtask 1", "subtask 2"]
+    },
+    {
+      "command": "echo 'starting server' ; sleep 5 ; echo 'stopping server'",
+      "label": "server",
+      "type": "shell"
+    },
+    {
+      "command": "echo 'starting client' ; sleep 5 ; echo 'stopping client'",
+      "label": "client",
+      "type": "shell"
+    },
+    {
+      "label": "start server and client",
+      "dependsOn": ["server", "client"]
     }
   ],
   "version": "2.0.0"
