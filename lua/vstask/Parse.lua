@@ -13,7 +13,7 @@ local auto_detect = {
 }
 
 local function should_handle_pick_string(input_config)
-return input_config and input_config.type == "command" and input_config.command == "extension.commandvariable.pickStringRemember"
+  return input_config and input_config.type == "command" and input_config.command == "extension.commandvariable.pickStringRemember"
 end
 
 
