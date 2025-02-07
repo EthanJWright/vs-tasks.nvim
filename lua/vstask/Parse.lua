@@ -17,7 +17,7 @@ return input_config and input_config.type == "command" and input_config.command 
 end
 
 
-local function handle_pick_string_remember(input, input_config, opts)
+local function handle_pick_string_remember(input, input_config, opts, callback)
     local pickers = require("telescope.pickers")
     local finders = require("telescope.finders")
     local conf = require("telescope.config").values
@@ -51,6 +51,9 @@ local function handle_pick_string_remember(input, input_config, opts)
                     end
                     Inputs[input].value = selection.value
                     Inputs[input].id = input
+                    if callback ~= nil then
+                      callback()
+                    end
                 end
             end)
             return true
@@ -315,22 +318,7 @@ local function get_input_variables(command)
 	return input_variables, count
 end
 
-local function load_input_variable(input, opts)
-    -- Get the input configuration
-    local input_config = nil
-    for _, cfg in pairs(Inputs) do
-        if cfg.id == input then
-            input_config = cfg
-            break
-        end
-    end
-
-    -- Handle pickStringRemember command type
-    if should_handle_pick_string(input_config) then
-        handle_pick_string_remember(input, input_config, opts)
-        return
-    end
-
+local function handle_standard_input(input, callback)
     -- Handle regular input types
     local input_val = vim.fn.input(input .. "=", "")
     if input_val == "clear" then
@@ -341,7 +329,33 @@ local function load_input_variable(input, opts)
         end
         Inputs[input]["value"] = input_val
         Inputs[input]["id"] = input
+        if callback ~= nil then
+          callback()
+        end
     end
+end
+
+local get_input_config = function(input)
+    local input_config = nil
+    for _, cfg in pairs(Inputs) do
+        if cfg.id == input then
+            input_config = cfg
+            break
+        end
+    end
+  return input_config
+end
+
+
+local function load_input_variable(input, opts)
+  local input_config = get_input_config(input)
+
+  if should_handle_pick_string(input_config) then
+      handle_pick_string_remember(input, input_config, opts)
+      return
+  end
+
+  handle_standard_input(input)
 end
 
 local function get_predefined_variables(command)
@@ -377,25 +391,6 @@ local find_missing_inputs = function(inputs, input_vars)
   return missing
 end
 
-local get_missing_inputs_from_user = function(missing)
-  for _, input in pairs(missing) do
-    load_input_variable(input)
-  end
-end
-
-local get_existing_variables = function(command)
-	local input_vars = get_input_variables(command)
-	local predefined_vars = get_predefined_variables(command)
-  return input_vars, predefined_vars
-end
-
-local extract_variables = function(command, inputs)
-  local input_vars, predefined_vars = get_existing_variables(command)
-  local missing = find_missing_inputs(inputs, input_vars)
-  -- this gets user input
-	return input_vars, predefined_vars, missing
-end
-
 local function replace_input_vars(input_vars, inputs, command)
 	for _, replacing in pairs(input_vars) do
 		local replace_pattern = "${input:" .. replacing .. "}"
@@ -421,6 +416,46 @@ local function command_replacements(input_vars, inputs, predefined_vars, command
   command = replace_predefined_vars(predefined_vars, command)
   return command
 end
+
+local get_inputs_and_run = function(input_vars, inputs, predefined_vars, missing, raw_command, callback, opts)
+  local missing_length = #missing
+  for index, input in pairs(missing) do
+    local input_config = get_input_config(input)
+    local run_callback = function()
+      if missing_length == index then
+        local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
+        vim.notify("Running: " .. command, vim.log.levels.INFO)
+        callback(command)
+      end
+    end
+    if should_handle_pick_string(input_config) then
+        handle_pick_string_remember(input, input_config, opts, run_callback)
+        return
+    end
+    handle_standard_input(input, run_callback)
+  end
+end
+
+local get_missing_inputs_from_user = function(missing)
+  for _, input in pairs(missing) do
+    load_input_variable(input)
+  end
+end
+
+local get_existing_variables = function(command)
+	local input_vars = get_input_variables(command)
+	local predefined_vars = get_predefined_variables(command)
+  return input_vars, predefined_vars
+end
+
+local extract_variables = function(command, inputs)
+  local input_vars, predefined_vars = get_existing_variables(command)
+  local missing = find_missing_inputs(inputs, input_vars)
+  -- this gets user input
+	return input_vars, predefined_vars, missing
+end
+
+
 
 local function replace_vars_in_command(command)
 	local inputs = get_inputs()
@@ -459,11 +494,10 @@ end
 
 -- Function to replace variables and execute callback
 local function replace_and_run(command, callback)
-    local replaced_command = replace_vars_in_command(command)
-    if callback then
-        callback(replaced_command)
-    end
-    return replaced_command
+  local inputs = get_inputs()
+	local input_vars, predefined_vars, missing = extract_variables(command, inputs)
+  get_inputs_and_run(input_vars, inputs, predefined_vars, missing, command, callback)
+	return command
 end
 
 return {

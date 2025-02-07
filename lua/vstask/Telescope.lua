@@ -49,7 +49,7 @@ local function get_last()
 	return last_cmd
 end
 
-local function format_command(pre, options)
+local function clean_command(pre, options)
 	local command = pre
 	if type(options) == "table" then
 		local cwd = options["cwd"]
@@ -58,12 +58,7 @@ local function format_command(pre, options)
 			command = string.format("%s && %s", cd_command, command)
 		end
 	end
-	command = Parse.replace(command)
-	return {
-		pre = pre,
-		command = command,
-		options = options,
-	}
+	return command
 end
 
 local function set_mappings(new_mappings)
@@ -353,18 +348,23 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		set_history(label, command, options)
 	end
 
-	local formatted_command = format_command(command, options)
+	local cleaned = clean_command(command, options)
+
 	if args ~= nil then
-		formatted_command.command = Parse.Build_launch(formatted_command.command, args)
+		cleaned = Parse.replace(cleaned)
+		cleaned = Parse.Build_launch(cleaned, args)
 	end
 
 	if direction == "background_job" or direction == "watch_job" then
-		process_command_background(label, formatted_command.command, false, direction == "watch_job")
+		process_command_background(label, cleaned, false, direction == "watch_job")
 	else
-		process_command(formatted_command.command, direction, Term_opts)
-		if direction ~= "current" then
-			vim.cmd("normal! G")
+		local process = function(prepared_command)
+			process_command(prepared_command, direction, Term_opts)
+			if direction ~= "current" then
+				vim.cmd("normal! G")
+			end
 		end
+		Parse.replace_and_run(cleaned, process)
 	end
 end
 
