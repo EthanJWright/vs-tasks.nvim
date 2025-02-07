@@ -102,7 +102,6 @@ local process_command_background = function(label, command, silent, watch, on_co
 
 			-- Add to history unless it's a watch job
 			if not job.watch then
-				vim.notify("Adding to job history - " .. job.label, vim.log.levels.INFO)
 				table.insert(job_history, {
 					label = job.label,
 					end_time = os.time(),
