@@ -419,12 +419,15 @@ end
 
 local get_inputs_and_run = function(input_vars, inputs, predefined_vars, missing, raw_command, callback, opts)
   local missing_length = #missing
+  local fetched_missing = false
+
   for index, input in pairs(missing) do
     local input_config = get_input_config(input)
     local run_callback = function()
       if missing_length == index then
         local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
         vim.notify("Running: " .. command, vim.log.levels.INFO)
+        fetched_missing = true
         callback(command)
       end
     end
@@ -433,6 +436,10 @@ local get_inputs_and_run = function(input_vars, inputs, predefined_vars, missing
         return
     end
     handle_standard_input(input, run_callback)
+  end
+  if fetched_missing == false then
+    local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
+    callback(command)
   end
 end
 
@@ -497,7 +504,6 @@ local function replace_and_run(command, callback)
   local inputs = get_inputs()
 	local input_vars, predefined_vars, missing = extract_variables(command, inputs)
   get_inputs_and_run(input_vars, inputs, predefined_vars, missing, command, callback)
-	return command
 end
 
 return {
