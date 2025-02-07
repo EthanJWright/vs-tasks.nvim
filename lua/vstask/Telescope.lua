@@ -23,7 +23,6 @@ local command_history = {}
 local background_jobs = {}
 local job_history = {}
 local live_output_buffers = {} -- Track buffers showing live job output
-local task_queue = {}
 
 local process_command_background = function(label, command, silent, watch, on_complete)
 	local function notify(msg, level)
@@ -181,8 +180,9 @@ local function find_task_by_label(label, task_list)
 end
 
 -- Run dependent tasks sequentially in background
-local function run_dependent_tasks(task, task_list, on_complete)
+local function run_dependent_tasks(task, task_list)
 	local deps = type(task.dependsOn) == "string" and { task.dependsOn } or task.dependsOn
+	local task_queue = {}
 
 	-- Run each dependent task
 	for _, dep_label in ipairs(deps) do
@@ -195,17 +195,35 @@ local function run_dependent_tasks(task, task_list, on_complete)
 		end
 	end
 	-- add the original task to the queue
-	task_queue[#task_queue + 1] = { label = task.label, command = clean_command(task.command, task.options) }
+	if task.command ~= nil then
+		task_queue[#task_queue + 1] = { label = task.label, command = clean_command(task.command, task.options) }
+	end
+
+	local function report_done()
+		vim.notify("All dependent tasks completed", vim.log.levels.INFO)
+	end
 
 	local function run_next_task()
 		if #task_queue == 0 then
-			vim.notify("All dependent tasks completed", vim.log.levels.INFO)
+			report_done()
 			return
 		end
 		local next_task = table.remove(task_queue, 1)
 		process_command_background(next_task.label, next_task.command, false, false, run_next_task)
 	end
-	run_next_task()
+
+	local function run_all_tasks()
+		-- Run all tasks in parallel
+		for _, parallel_task in ipairs(task_queue) do
+			process_command_background(parallel_task.label, parallel_task.command, false, false)
+		end
+	end
+
+	if task.dependsOrder ~= nil and task.dependsOrder == "sequence" then
+		run_next_task()
+	else
+		run_all_tasks()
+	end
 end
 
 local function set_mappings(new_mappings)
