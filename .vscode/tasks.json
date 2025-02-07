@@ -15,15 +15,7 @@
         "options": [
           ["normal cow", "mooooo"],
           ["imposture", "bark bark"]
-        ],
-        "default": "",
-        "fileName": "${workspaceFolder}/foo-bar.txt",
-        "pattern": {
-          "regexp": "^\\s*(?!#)([^=]+?)\\s*=\\s*(?:(\\{.+\\})|(.+))$",
-          "label": "$1",
-          "json": "$2",
-          "value": "$3"
-        }
+        ]
       }
     }
   ],
