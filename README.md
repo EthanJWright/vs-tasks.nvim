@@ -74,22 +74,79 @@ nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
 nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
 ```
 
-## Usage
+## Functions
 
-### When the task telescope is open
+### Task Management
 
-- Enter will open in toggleterm
-- Ctrl-v will open in a vertical split terminal
-- Ctrl-p will open in a split terminal
-- Ctrl-b will run the task as a job in the background
-- Ctrl-w will run the task as as a job in the background, and watch the file
-- Ctrl-r will take what ever input you typed and run it as a command
+`:Telescope vstask tasks`
 
-### When the jobs telescope is open
+- Opens task picker showing all available tasks from `.vscode/tasks.json` and `package.json` scripts
+- Key mappings:
+  - `<CR>` - Run in current window
+  - `<C-v>` - Run in vertical split
+  - `<C-p>` - Run in horizontal split
+  - `<C-t>` - Run in new tab
+  - `<C-b>` - Run as background job
+  - `<C-w>` - Run as watched background job (restarts on file save)
 
-- Enter will open any output in a temporary buffer
-- Ctrl-w will toggle the watch status
-- Ctrl-d will kill the job (j and k reserved for navigation)
+`:Telescope vstask run`
+
+- Opens empty task picker for running arbitrary shell commands
+- Supports same key mappings as tasks
+
+`:Telescope vstask inputs`
+
+- Opens input variables picker
+- Set values for task variables
+- Supports:
+  - promptString (text input)
+  - pickString (selection from list)
+
+`:Telescope vstask history`
+
+- Shows previously run tasks, sorted by usage frequency
+- Supports same key mappings as tasks
+
+`:Telescope vstask launch`
+
+- Opens launch configuration picker from `.vscode/launch.json`
+- Key mappings:
+  - `<CR>` - Run in current window
+  - `<C-v>` - Run in vertical split
+  - `<C-p>` - Run in horizontal split
+  - `<C-t>` - Run in new tab
+
+### Job Management
+
+`:Telescope vstask jobs`
+
+- Shows running background tasks
+- Key mappings:
+  - `<CR>` - View output in current window
+  - `<C-v>` - View output in vertical split
+  - `<C-w>` - Toggle watch mode (restart on save)
+  - `<C-d>` - Kill task
+- Features:
+  - Live output preview
+  - Watch mode for auto-restart
+  - Task status indicators
+
+`:Telescope vstask jobhistory`
+
+- Shows completed background tasks
+- Key mappings:
+  - `<CR>` - View output in current window
+  - `<C-v>` - View output in vertical split
+- Features:
+  - Exit status indication
+  - Runtime duration
+  - Full output history
+
+### Utility Functions
+
+`:Telescope vstask clear_inputs`
+
+- Clears all stored input variable values for current session
 
 ### Autodetect
 
