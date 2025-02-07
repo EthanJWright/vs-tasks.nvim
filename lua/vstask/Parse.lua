@@ -302,8 +302,6 @@ local function get_input_variable(getvar, inputs)
 	for _, input_dict in pairs(inputs) do
 		if input_dict["id"] == getvar then
 			return input_dict["value"]
-		else
-			print("no match for: " .. input_dict["value"])
 		end
 	end
 end
