@@ -12,6 +12,52 @@ local auto_detect = {
 	npm = "on",
 }
 
+local function should_handle_pick_string(input_config)
+return input_config and input_config.type == "command" and input_config.command == "extension.commandvariable.pickStringRemember"
+end
+
+
+local function handle_pick_string_remember(input, input_config, opts)
+    local pickers = require("telescope.pickers")
+    local finders = require("telescope.finders")
+    local conf = require("telescope.config").values
+    local actions = require("telescope.actions")
+    local action_state = require("telescope.actions.state")
+
+    -- Extract options from args
+    local options = input_config.args.options or {}
+    local description = input_config.args.description or "Select an option:"
+
+    pickers.new(opts, {
+        prompt_title = description,
+        finder = finders.new_table {
+            results = options,
+            entry_maker = function(entry)
+                return {
+                    value = entry[2],
+                    display = entry[1],
+                    ordinal = entry[1],
+                }
+            end,
+        },
+        sorter = conf.generic_sorter({}),
+        attach_mappings = function(prompt_bufnr, _)
+            actions.select_default:replace(function()
+                actions.close(prompt_bufnr)
+                local selection = action_state.get_selected_entry()
+                if selection then
+                    if Inputs[input] == nil then
+                        Inputs[input] = {}
+                    end
+                    Inputs[input].value = selection.value
+                    Inputs[input].id = input
+                end
+            end)
+            return true
+        end,
+    }):find()
+end
+
 local config_dir = ".vscode"
 
 local function set_config_dir(dirname)
@@ -280,46 +326,8 @@ local function load_input_variable(input, opts)
     end
 
     -- Handle pickStringRemember command type
-    if input_config and input_config.type == "command" and input_config.command == "extension.commandvariable.pickStringRemember" then
-        vim.notify("about to build description", vim.log.levels.INFO)
-        local pickers = require("telescope.pickers")
-        local finders = require("telescope.finders")
-        local conf = require("telescope.config").values
-        local actions = require("telescope.actions")
-        local action_state = require("telescope.actions.state")
-
-        -- Extract options from args
-        local options = input_config.args.options or {}
-        local description = input_config.args.description or "Select an option:"
-
-        pickers.new(opts, {
-            prompt_title = description,
-            finder = finders.new_table {
-                results = options,
-                entry_maker = function(entry)
-                    return {
-                        value = entry[2],
-                        display = entry[1],
-                        ordinal = entry[1],
-                    }
-                end,
-            },
-            sorter = conf.generic_sorter({}),
-            attach_mappings = function(prompt_bufnr, _)
-                actions.select_default:replace(function()
-                    actions.close(prompt_bufnr)
-                    local selection = action_state.get_selected_entry()
-                    if selection then
-                        if Inputs[input] == nil then
-                            Inputs[input] = {}
-                        end
-                        Inputs[input].value = selection.value
-                        Inputs[input].id = input
-                    end
-                end)
-                return true
-            end,
-        }):find()
+    if should_handle_pick_string(input_config) then
+        handle_pick_string_remember(input, input_config, opts)
         return
     end
 
@@ -353,6 +361,12 @@ local function get_predefined_variables(command)
 	return predefined_vars, count
 end
 
+local get_missing_inputs_from_user = function(missing)
+  for _, input in pairs(missing) do
+    load_input_variable(input["id"])
+  end
+end
+
 local extract_variables = function(command, inputs)
 	local input_vars = get_input_variables(command)
 	local predefined_vars = get_predefined_variables(command)
@@ -368,28 +382,40 @@ local extract_variables = function(command, inputs)
 			table.insert(missing, input_var)
 		end
 	end
-	for _, input in pairs(missing) do
-		load_input_variable(input)
-	end
+  get_missing_inputs_from_user(missing)
 	return input_vars, predefined_vars
 end
 
-local function replace_vars_in_command(command)
-	local inputs = get_inputs()
-	local input_vars, predefined_vars = extract_variables(command, inputs)
+local function replace_input_vars(input_vars, inputs, command)
 	for _, replacing in pairs(input_vars) do
 		local replace_pattern = "${input:" .. replacing .. "}"
 		local replace = get_input_variable(replacing, inputs)
 		command = string.gsub(command, replace_pattern, replace)
 	end
+  return command
+end
 
-	for _, replacing in pairs(predefined_vars) do
-		local func = get_predefined_function(replacing, Predefined)
-		if func ~= nil then
-			local replace_pattern = "${" .. replacing .. "}"
-			command = string.gsub(command, replace_pattern, func())
-		end
-	end
+local function replace_predefined_vars(predefined_vars, command)
+  for _, replacing in pairs(predefined_vars) do
+    local func = get_predefined_function(replacing, Predefined)
+    if func ~= nil then
+      local replace_pattern = "${" .. replacing .. "}"
+      command = string.gsub(command, replace_pattern, func())
+    end
+  end
+  return command
+end
+
+local function command_replacements(input_vars, inputs, predefined_vars, command)
+  command = replace_input_vars(input_vars, inputs, command)
+  command = replace_predefined_vars(predefined_vars, command)
+  return command
+end
+
+local function replace_vars_in_command(command)
+	local inputs = get_inputs()
+	local input_vars, predefined_vars = extract_variables(command, inputs)
+  command = command_replacements(input_vars, inputs, predefined_vars, command)
 	return command
 end
 
@@ -407,18 +433,31 @@ local function get_launches()
 	end
 	local path = vim.fn.getcwd() .. "/" .. config_dir .. "/launch.json"
 	if not file_exists(path) then
-		vim.notify(MISSING_FILE_MESSAGE, "error")
+		vim.notify(MISSING_FILE_MESSAGE,  vim.log.levels.ERROR)
 		return {}
 	end
 	get_inputs()
 	local configurations = Config.load_json(path, JSON_PARSER)
-	Launches = configurations["configurations"]
+
+  if configurations ~= nil then
+    Launches = configurations["configurations"]
+  end
 	launch_cache = create_cache(Launches, "name")
 	return Launches
 end
 
+-- Function to replace variables and execute callback
+local function replace_and_run(command, callback)
+    local replaced_command = replace_vars_in_command(command)
+    if callback then
+        callback(replaced_command)
+    end
+    return replaced_command
+end
+
 return {
 	replace = replace_vars_in_command,
+	replace_and_run = replace_and_run,
 	Inputs = get_inputs,
 	Tasks = get_tasks,
 	Launches = get_launches,
