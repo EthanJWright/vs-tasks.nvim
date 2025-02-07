@@ -17,6 +17,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 - ⟳ Run tasks from your history, sorted by most used
 - 🐚 run shell commands with .run() or <C-r>
 - basic support for option picker for task input (similar to extension.commandvariable.pickStringRemember)
+- dependsOn and dependsOrder support, utilizing the background jobs feature. View with JobHistory and Jobs
 
 ## Example
 
@@ -73,22 +74,79 @@ nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
 nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
 ```
 
-## Usage
+## Functions
 
-### When the task telescope is open
+### Task Management
 
-- Enter will open in toggleterm
-- Ctrl-v will open in a vertical split terminal
-- Ctrl-p will open in a split terminal
-- Ctrl-b will run the task as a job in the background
-- Ctrl-w will run the task as as a job in the background, and watch the file
-- Ctrl-r will take what ever input you typed and run it as a command
+`:Telescope vstask tasks`
 
-### When the jobs telescope is open
+- Opens task picker showing all available tasks from `.vscode/tasks.json` and `package.json` scripts
+- Key mappings:
+  - `<CR>` - Run in current window
+  - `<C-v>` - Run in vertical split
+  - `<C-p>` - Run in horizontal split
+  - `<C-t>` - Run in new tab
+  - `<C-b>` - Run as background job
+  - `<C-w>` - Run as watched background job (restarts on file save)
 
-- Enter will open any output in a temporary buffer
-- Ctrl-w will toggle the watch status
-- Ctrl-d will kill the job (j and k reserved for navigation)
+`:Telescope vstask run`
+
+- Opens empty task picker for running arbitrary shell commands
+- Supports same key mappings as tasks
+
+`:Telescope vstask inputs`
+
+- Opens input variables picker
+- Set values for task variables
+- Supports:
+  - promptString (text input)
+  - pickString (selection from list)
+
+`:Telescope vstask history`
+
+- Shows previously run tasks, sorted by usage frequency
+- Supports same key mappings as tasks
+
+`:Telescope vstask launch`
+
+- Opens launch configuration picker from `.vscode/launch.json`
+- Key mappings:
+  - `<CR>` - Run in current window
+  - `<C-v>` - Run in vertical split
+  - `<C-p>` - Run in horizontal split
+  - `<C-t>` - Run in new tab
+
+### Job Management
+
+`:Telescope vstask jobs`
+
+- Shows running background tasks
+- Key mappings:
+  - `<CR>` - View output in current window
+  - `<C-v>` - View output in vertical split
+  - `<C-w>` - Toggle watch mode (restart on save)
+  - `<C-d>` - Kill task
+- Features:
+  - Live output preview
+  - Watch mode for auto-restart
+  - Task status indicators
+
+`:Telescope vstask jobhistory`
+
+- Shows completed background tasks
+- Key mappings:
+  - `<CR>` - View output in current window
+  - `<C-v>` - View output in vertical split
+- Features:
+  - Exit status indication
+  - Runtime duration
+  - Full output history
+
+### Utility Functions
+
+`:Telescope vstask clear_inputs`
+
+- Clears all stored input variable values for current session
 
 ### Autodetect
 
@@ -231,6 +289,37 @@ In your project root set up `.vscode/tasks.json` (default config directory set t
       "label": "Arg Hello World",
       "problemMatcher": [],
       "type": "shell"
+    },
+    {
+      "command": "sleep 1 ; echo 'hello from subtask 1' > /tmp/tmp.txt",
+      "label": "subtask 1",
+      "type": "shell"
+    },
+    {
+      "command": "sleep 1 ; echo 'hello from subtask 2' >> /tmp/tmp.txt",
+      "label": "subtask 2",
+      "type": "shell"
+    },
+    {
+      "command": "cat /tmp/tmp.txt",
+      "label": "hello from subtask",
+      "type": "shell",
+      "dependsOrder": "sequence",
+      "dependsOn": ["subtask 1", "subtask 2"]
+    },
+    {
+      "command": "echo 'starting server' ; sleep 5 ; echo 'stopping server'",
+      "label": "server",
+      "type": "shell"
+    },
+    {
+      "command": "echo 'starting client' ; sleep 5 ; echo 'stopping client'",
+      "label": "client",
+      "type": "shell"
+    },
+    {
+      "label": "start server and client",
+      "dependsOn": ["server", "client"]
     }
   ],
   "version": "2.0.0"
