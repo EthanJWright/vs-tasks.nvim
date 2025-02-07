@@ -16,6 +16,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 - Use VS Code's [launch.json](https://code.visualstudio.com/docs/editor/debugging#_launch-configurations) pattern (limited support)
 - ⟳ Run tasks from your history, sorted by most used
 - 🐚 run shell commands with .run() or <C-r>
+- basic support for option picker for task input (similar to extension.commandvariable.pickStringRemember)
 
 ## Example
 
@@ -65,6 +66,7 @@ Set up keybindings:
 ```vim
 nnoremap <Leader>ta :lua require("telescope").extensions.vstask.tasks()<CR>
 nnoremap <Leader>ti :lua require("telescope").extensions.vstask.inputs()<CR>
+nnoremap <Leader>ti :lua require("telescope").extensions.vstask.clear_inputs()<CR>
 nnoremap <Leader>th :lua require("telescope").extensions.vstask.history()<CR>
 nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
 nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
@@ -178,33 +180,60 @@ In your project root set up `.vscode/tasks.json` (default config directory set t
 
 ```json
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "🧪 Run unit tests that match the expression",
-      "type": "shell",
-      "command": "pytest -k '${input:expression}'"
-    },
-    {
-      "label": "🐮 Cowsay",
-      "type": "shell",
-      "command": "echo ${input:cowmsg} | cowsay"
-    }
-  ],
   "inputs": [
     {
-      "id": "expression",
-      "description": "Expression to filter tests with",
       "default": "",
+      "description": "Some term",
+      "id": "phrase",
       "type": "promptString"
     },
     {
-      "id": "cowmsg",
-      "description": "Message for cow to say",
-      "default": "Hello there!",
-      "type": "promptString"
+      "type": "command",
+      "id": "cowsay",
+      "command": "extension.commandvariable.pickStringRemember",
+      "args": {
+        "description": "what type of cow?",
+        "options": [
+          ["normal cow", "mooooo"],
+          ["imposture", "bark bark"]
+        ]
+      }
     }
-  ]
+  ],
+  "tasks": [
+    {
+      "command": "echo ${input:phrase} | cowsay",
+      "label": "🐮 Cowsay",
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
+      "command": "echo ${input:cowsay} | cowsay",
+      "label": "🐮 Cowsay with arg list",
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
+      "command": "echo ${relativeFile} | cowsay",
+      "label": "Relative File",
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
+      "command": "echo ${relativeFileDirname} | cowsay",
+      "label": "Relative File Dirname",
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
+      "args": ["hello", "world"],
+      "command": "echo ",
+      "label": "Arg Hello World",
+      "problemMatcher": [],
+      "type": "shell"
+    }
+  ],
+  "version": "2.0.0"
 }
 ```
 

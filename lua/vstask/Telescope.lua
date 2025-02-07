@@ -49,7 +49,7 @@ local function get_last()
 	return last_cmd
 end
 
-local function format_command(pre, options)
+local function clean_command(pre, options)
 	local command = pre
 	if type(options) == "table" then
 		local cwd = options["cwd"]
@@ -58,12 +58,7 @@ local function format_command(pre, options)
 			command = string.format("%s && %s", cd_command, command)
 		end
 	end
-	command = Parse.replace(command)
-	return {
-		pre = pre,
-		command = command,
-		options = options,
-	}
+	return command
 end
 
 local function set_mappings(new_mappings)
@@ -280,11 +275,20 @@ local function inputs(opts)
 	local selection_list = {}
 
 	for _, input_dict in pairs(input_list) do
+		local description = "set input"
+		if input_dict["command"] == "extension.commandvariable.pickStringRemember" then
+			description = "pick input from set list"
+		end
+
+		if input_dict["description"] ~= nil then
+			description = input_dict["description"]
+		end
+
 		local add_current = ""
 		if input_dict["value"] ~= "" then
 			add_current = " [" .. input_dict["value"] .. "] "
 		end
-		local current_task = input_dict["id"] .. add_current .. " => " .. input_dict["description"]
+		local current_task = input_dict["id"] .. add_current .. " => " .. description
 		table.insert(inputs_formatted, current_task)
 		table.insert(selection_list, input_dict)
 	end
@@ -302,7 +306,7 @@ local function inputs(opts)
 					actions.close(prompt_bufnr)
 
 					local input = selection_list[selection.index]["id"]
-					Parse.Set(input)
+					Parse.Set(input, opts)
 				end
 
 				map("i", "<CR>", start_task)
@@ -314,7 +318,7 @@ local function inputs(opts)
 		:find()
 end
 
-local function handle_direction(direction, prompt_bufnr, selection_list, is_launch)
+local function handle_direction(direction, prompt_bufnr, selection_list, is_launch, opts)
 	local selection = state.get_selected_entry(prompt_bufnr)
 	actions.close(prompt_bufnr)
 
@@ -344,27 +348,32 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		set_history(label, command, options)
 	end
 
-	local formatted_command = format_command(command, options)
+	local cleaned = clean_command(command, options)
+
 	if args ~= nil then
-		formatted_command.command = Parse.Build_launch(formatted_command.command, args)
+		cleaned = Parse.replace(cleaned)
+		cleaned = Parse.Build_launch(cleaned, args)
 	end
 
 	if direction == "background_job" or direction == "watch_job" then
-		process_command_background(label, formatted_command.command, false, direction == "watch_job")
+		process_command_background(label, cleaned, false, direction == "watch_job")
 	else
-		process_command(formatted_command.command, direction, Term_opts)
-		if direction ~= "current" then
-			vim.cmd("normal! G")
+		local process = function(prepared_command)
+			process_command(prepared_command, direction, Term_opts)
+			if direction ~= "current" then
+				vim.cmd("normal! G")
+			end
 		end
+		Parse.replace_and_run(cleaned, process, opts)
 	end
 end
 
-local function start_launch_direction(direction, prompt_bufnr, _, selection_list)
-	handle_direction(direction, prompt_bufnr, selection_list, true)
+local function start_launch_direction(direction, prompt_bufnr, _, selection_list, opts)
+	handle_direction(direction, prompt_bufnr, selection_list, true, opts)
 end
 
-local function start_task_direction(direction, prompt_bufnr, _, selection_list)
-	handle_direction(direction, prompt_bufnr, selection_list, false)
+local function start_task_direction(direction, prompt_bufnr, _, selection_list, opts)
+	handle_direction(direction, prompt_bufnr, selection_list, false, opts)
 end
 
 local function history(opts)
@@ -396,16 +405,16 @@ local function history(opts)
 			sorter = sorters.get_generic_fuzzy_sorter(),
 			attach_mappings = function(prompt_bufnr, map)
 				local function start_task()
-					start_task_direction("current", prompt_bufnr, map, sorted_history)
+					start_task_direction("current", prompt_bufnr, map, sorted_history, opts)
 				end
 				local function start_task_vertical()
-					start_task_direction("vertical", prompt_bufnr, map, sorted_history)
+					start_task_direction("vertical", prompt_bufnr, map, sorted_history, opts)
 				end
 				local function start_task_split()
-					start_task_direction("horizontal", prompt_bufnr, map, sorted_history)
+					start_task_direction("horizontal", prompt_bufnr, map, sorted_history, opts)
 				end
 				local function start_task_tab()
-					start_task_direction("tab", prompt_bufnr, map, sorted_history)
+					start_task_direction("tab", prompt_bufnr, map, sorted_history, opts)
 				end
 				map("i", Mappings.current, start_task)
 				map("n", Mappings.current, start_task)
@@ -467,7 +476,7 @@ local function tasks(opts)
 
 					for direction, mapping in pairs(directions) do
 						local handler = function()
-							direction_handler(direction, prompt_bufnr, map, task_list)
+							direction_handler(direction, prompt_bufnr, map, task_list, opts)
 						end
 						map("i", mapping, handler)
 						map("n", mapping, handler)
