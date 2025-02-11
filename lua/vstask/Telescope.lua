@@ -86,7 +86,29 @@ local start_job = function(opts)
 
 	local output = {}
 	local job_id
-	job_id = vim.fn.jobstart(command, {
+
+	local open_terminal = options.terminal
+
+	-- Create a new buffer for the terminal
+	local current_buf = vim.api.nvim_get_current_buf()
+	local buf = vim.api.nvim_create_buf(true, false)
+	if open_terminal == true then
+		notify("Starting task..." .. options.label, vim.log.levels.INFO)
+		handle_direction(options.direction)
+	else
+		notify("Starting backgrounded task..." .. options.label, vim.log.levels.INFO)
+	end
+
+	-- show the buffer
+	vim.api.nvim_win_set_buf(0, buf)
+
+	-- Set buffer name after terminal creation
+	vim.schedule(function()
+		name_buffer(buf, options.label)
+	end)
+	job_id = vim.fn.jobstart(options.command, {
+		term = open_terminal,
+		pty = open_terminal,
 		on_stdout = function(_, data)
 			if data then
 				vim.list_extend(output, data)
@@ -128,28 +150,6 @@ local start_job = function(opts)
 				end
 			end
 		end,
-	local open_terminal = options.terminal
-
-	-- Create a new buffer for the terminal
-	local current_buf = vim.api.nvim_get_current_buf()
-	local buf = vim.api.nvim_create_buf(true, false)
-	if open_terminal == true then
-		notify("Starting task..." .. options.label, vim.log.levels.INFO)
-		handle_direction(options.direction)
-	else
-		notify("Starting backgrounded task..." .. options.label, vim.log.levels.INFO)
-	end
-
-	-- show the buffer
-	vim.api.nvim_win_set_buf(0, buf)
-
-	-- Set buffer name after terminal creation
-	vim.schedule(function()
-		name_buffer(buf, options.label)
-	end)
-	job_id = vim.fn.jobstart(options.command, {
-		term = open_terminal,
-		pty = open_terminal,
 		on_exit = function(_, exit_code)
 			local job = background_jobs[job_id]
 
