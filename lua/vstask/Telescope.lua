@@ -845,6 +845,8 @@ local function jobs_picker(opts)
 					if is_running then
 						-- Kill the running job
 						vim.fn.jobstop(job.id)
+						-- Remove from background_jobs
+						background_jobs[job.id] = nil
 						vim.notify(string.format("Killed job %d: %s", job.id, job.command), vim.log.levels.INFO)
 					end
 
@@ -858,9 +860,6 @@ local function jobs_picker(opts)
 							end
 						end
 					end
-
-					-- Remove from background_jobs
-					background_jobs[job.id] = nil
 
 					-- Remove from live_output_buffers if present
 					if live_output_buffers[job.id] then
