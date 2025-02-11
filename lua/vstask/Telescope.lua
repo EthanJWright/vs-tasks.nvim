@@ -401,7 +401,7 @@ local function preview_job_output(output, bufnr, job_id)
 	end
 end
 
-local function inputs(opts)
+local function inputs_picker(opts)
 	opts = opts or {}
 
 	local input_list = Parse.Inputs()
@@ -540,7 +540,7 @@ local function start_task_direction(direction, prompt_bufnr, _, selection_list, 
 	handle_direction(direction, prompt_bufnr, selection_list, false, opts)
 end
 
-local function tasks(opts)
+local function tasks_picker(opts)
 	opts = opts or {}
 
 	local task_list = Parse.Tasks()
@@ -600,13 +600,7 @@ local function tasks(opts)
 		:find()
 end
 
-local function tasks_empty(opts)
-	opts = opts or {}
-	opts.run_empty = true
-	tasks(opts)
-end
-
-local function launches(opts)
+local function launches_picker(opts)
 	opts = opts or {}
 
 	local launch_list = Parse.Launches()
@@ -789,7 +783,7 @@ local function open_buffer(label)
 	end
 end
 
-local function background_jobs_list(opts)
+local function jobs_picker(opts)
 	opts = opts or {}
 
 	local jobs_list = {}
@@ -901,11 +895,10 @@ local function background_jobs_list(opts)
 end
 
 return {
-	Launch = launches,
-	Tasks = tasks,
-	Tasks_empty = tasks_empty,
-	Inputs = inputs,
-	Jobs = background_jobs_list,
+	Launch = launches_picker,
+	Tasks = tasks_picker,
+	Inputs = inputs_picker,
+	Jobs = jobs_picker,
 	Set_mappings = set_mappings,
 	Set_term_opts = set_term_opts,
 	Get_last = get_last,
