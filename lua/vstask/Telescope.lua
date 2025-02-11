@@ -472,7 +472,6 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		options = nil
 		label = "CMD: " .. current_line
 		args = nil
-		set_history(label, command, options)
 	elseif is_launch then
 		command = selection_list[selection.index]["program"]
 		options = selection_list[selection.index]["options"]
@@ -484,7 +483,6 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		options = selection_list[selection.index]["options"]
 		label = selection_list[selection.index]["label"]
 		args = selection_list[selection.index]["args"]
-		set_history(label, command, options)
 	end
 
 	local cleaned = clean_command(command, options)
