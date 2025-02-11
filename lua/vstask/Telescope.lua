@@ -18,7 +18,6 @@ local Mappings = {
 	run = "<C-r>",
 }
 
-local command_history = {}
 local background_jobs = {}
 local live_output_buffers = {} -- Track buffers showing live job output
 local Term_opts = {}
@@ -266,20 +265,6 @@ local function clean_command(pre, options)
 		end
 	end
 	return command
-end
-
-local function set_history(label, command, options)
-	if not command_history[label] then
-		command_history[label] = {
-			command = command,
-			options = options,
-			label = label,
-			hits = 1,
-		}
-	else
-		command_history[label].hits = command_history[label].hits + 1
-	end
-	Parse.Used_task(label)
 end
 
 local last_cmd = nil
@@ -553,60 +538,6 @@ end
 
 local function start_task_direction(direction, prompt_bufnr, _, selection_list, opts)
 	handle_direction(direction, prompt_bufnr, selection_list, false, opts)
-end
-
-local function history(opts)
-	if vim.tbl_isempty(command_history) then
-		return
-	end
-	-- sort command history by hits
-	local sorted_history = {}
-	for _, command in pairs(command_history) do
-		table.insert(sorted_history, command)
-	end
-	table.sort(sorted_history, function(a, b)
-		return a.hits > b.hits
-	end)
-
-	-- build label table
-	local labels = {}
-	for i = 1, #sorted_history do
-		local current_task = sorted_history[i]["label"]
-		table.insert(labels, current_task)
-	end
-
-	pickers
-		.new(opts, {
-			prompt_title = "Task History",
-			finder = finders.new_table({
-				results = labels,
-			}),
-			sorter = sorters.get_generic_fuzzy_sorter(),
-			attach_mappings = function(prompt_bufnr, map)
-				local function start_task()
-					start_task_direction("current", prompt_bufnr, map, sorted_history, opts)
-				end
-				local function start_task_vertical()
-					start_task_direction("vertical", prompt_bufnr, map, sorted_history, opts)
-				end
-				local function start_task_split()
-					start_task_direction("horizontal", prompt_bufnr, map, sorted_history, opts)
-				end
-				local function start_task_tab()
-					start_task_direction("tab", prompt_bufnr, map, sorted_history, opts)
-				end
-				map("i", Mappings.current, start_task)
-				map("n", Mappings.current, start_task)
-				map("i", Mappings.vertical, start_task_vertical)
-				map("n", Mappings.vertical, start_task_vertical)
-				map("i", Mappings.split, start_task_split)
-				map("n", Mappings.split, start_task_split)
-				map("i", Mappings.tab, start_task_tab)
-				map("n", Mappings.tab, start_task_tab)
-				return true
-			end,
-		})
-		:find()
 end
 
 local function tasks(opts)
@@ -974,7 +905,6 @@ return {
 	Tasks = tasks,
 	Tasks_empty = tasks_empty,
 	Inputs = inputs,
-	History = history,
 	Jobs = background_jobs_list,
 	Set_mappings = set_mappings,
 	Set_term_opts = set_term_opts,
