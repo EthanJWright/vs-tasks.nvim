@@ -195,9 +195,9 @@ local start_job = function(opts)
 						-- Copy terminal buffer content to live output buffer
 						local content = get_buffer_content(job_id)
 						pcall(function()
-							vim.api.nvim_buf_set_option(live_output_buffers[job_id], "modifiable", true)
+							vim.bo[live_output_buffers[job_id]].modifiable = true
 							vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, content)
-							vim.api.nvim_buf_set_option(live_output_buffers[job_id], "modifiable", false)
+							vim.bo[live_output_buffers[job_id]].modifiable = false
 						end)
 
 						-- Always scroll to bottom for live updates
@@ -219,9 +219,9 @@ local start_job = function(opts)
 						-- Copy terminal buffer content to live output buffer
 						local content = get_buffer_content(job_id)
 						pcall(function()
-							vim.api.nvim_buf_set_option(live_output_buffers[job_id], "modifiable", true)
+							vim.bo[live_output_buffers[job_id]].modifiable = true
 							vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, content)
-							vim.api.nvim_buf_set_option(live_output_buffers[job_id], "modifiable", false)
+							vim.bo[live_output_buffers[job_id]].modifiable = false
 						end)
 
 						-- Scroll to bottom if cursor was at bottom
@@ -449,10 +449,10 @@ local function preview_job_output(output, bufnr, job_id)
 	end
 
 	-- Set the lines in the preview buffer
-	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
+	vim.bo[bufnr].modifiable = true
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, filtered_output)
-	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
-	vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
+	vim.bo[bufnr].modifiable = false
+	vim.bo[bufnr].filetype = "sh"
 
 	-- Center the content in the preview window
 	vim.schedule(function()
@@ -627,6 +627,7 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 	end
 
 	if direction == "background_job" or direction == "watch_job" then
+		cleaned = Parse.replace(cleaned)
 		-- If task has dependencies, run them first
 		start_job({
 			label = label,
