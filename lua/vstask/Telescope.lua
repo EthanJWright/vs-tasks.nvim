@@ -22,6 +22,10 @@ local background_jobs = {}
 local live_output_buffers = {} -- Track buffers showing live job output
 local Term_opts = {}
 
+local is_job_running = function(job_id)
+	return job_id and background_jobs[job_id].completed ~= true
+end
+
 local function scroll_to_bottom(win_id)
 	if win_id and win_id ~= -1 then
 		local buf = vim.api.nvim_win_get_buf(win_id)
@@ -80,7 +84,27 @@ end
 -- Function to get terminal buffer content
 local function get_buffer_content(buf_job_id)
 	-- Check if job exists
-	if not buf_job_id or not background_jobs[buf_job_id] then
+	if not buf_job_id then
+		return {}
+	end
+
+	-- First try to find the job directly
+	local job = background_jobs[buf_job_id]
+
+	-- If not found directly, try to find by id field
+	if not job then
+		for job_id, j in pairs(background_jobs) do
+			if j.id == buf_job_id then
+				job = j
+				-- Update the job reference to use job_id as key
+				background_jobs[buf_job_id] = j
+				background_jobs[job_id] = nil
+				break
+			end
+		end
+	end
+
+	if not job then
 		return {}
 	end
 
@@ -88,8 +112,7 @@ local function get_buffer_content(buf_job_id)
 	for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
 		if vim.api.nvim_buf_is_valid(buf_id) then
 			local buf_name = vim.api.nvim_buf_get_name(buf_id)
-			local job_label = background_jobs[buf_job_id].label
-			if buf_name:match(vim.pesc(LABEL_PRE .. job_label)) then
+			if buf_name:match(vim.pesc(LABEL_PRE .. job.label)) then
 				return vim.api.nvim_buf_get_lines(buf_id, 0, -1, false)
 			end
 		end
@@ -228,6 +251,7 @@ local start_job = function(opts)
 				local content = get_buffer_content(job_id)
 				-- Update the job with final state
 				background_jobs[job_id] = {
+					id = job_id,
 					label = job.label,
 					end_time = os.time(),
 					start_time = job.start_time or os.time(),
@@ -379,6 +403,11 @@ local function preview_job_output(output, bufnr, job_id)
 	local start_idx = #lines > max_lines and #lines - max_lines or 0
 	local recent_output = vim.list_slice(lines, start_idx + 1)
 
+	-- Trim trailing empty lines
+	while #recent_output > 0 and recent_output[#recent_output] == "" do
+		table.remove(recent_output)
+	end
+
 	-- Set the lines in the preview buffer
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, recent_output)
@@ -397,7 +426,7 @@ local function preview_job_output(output, bufnr, job_id)
 	end)
 
 	-- Set up live updates for preview if job is running
-	if job_id and background_jobs[job_id] then
+	if is_job_running(job_id) then
 		-- Remove any existing autocmds for this buffer
 		vim.api.nvim_create_autocmd("User", {
 			pattern = "VsTaskJobOutput",
@@ -792,28 +821,41 @@ local function open_buffer(label)
 	end
 end
 
-local function jobs_picker(opts)
-	opts = opts or {}
-
+-- Build a sorted list of jobs
+local function build_jobs_list()
 	local jobs_list = {}
-	local jobs_formatted = {}
-
-	-- Add all jobs (both running and completed)
-	for job_id, job_info in pairs(background_jobs) do
-		local is_running = not job_info.completed and vim.fn.jobwait({ job_id }, 0)[1] == -1
+	for _, job_info in pairs(background_jobs) do
 		table.insert(jobs_list, job_info)
-		table.insert(jobs_formatted, format_job_entry(job_info, is_running))
-	end
-
-	if vim.tbl_isempty(jobs_formatted) then
-		vim.notify("No jobs available", vim.log.levels.INFO)
-		return
 	end
 
 	-- Sort all jobs by start_time (most recent first)
 	table.sort(jobs_list, function(a, b)
 		return a.start_time > b.start_time
 	end)
+
+	return jobs_list
+end
+
+-- Format the jobs list for display
+local function format_jobs_list(jobs_list)
+	local jobs_formatted = {}
+	for _, job_info in ipairs(jobs_list) do
+		local is_running = not job_info.completed and vim.fn.jobwait({ job_info.id }, 0)[1] == -1
+		table.insert(jobs_formatted, format_job_entry(job_info, is_running))
+	end
+	return jobs_formatted
+end
+
+local function jobs_picker(opts)
+	opts = opts or {}
+
+	local jobs_list = build_jobs_list()
+	local jobs_formatted = format_jobs_list(jobs_list)
+
+	if vim.tbl_isempty(jobs_formatted) then
+		vim.notify("No jobs available", vim.log.levels.INFO)
+		return
+	end
 
 	pickers
 		.new(opts, {
@@ -831,7 +873,7 @@ local function jobs_picker(opts)
 					end
 
 					local output
-					if job.id and background_jobs[job.id] then
+					if is_job_running(job.id) then
 						-- For running jobs, get fresh content from terminal
 						output = get_buffer_content(job.id)
 						preview_job_output(output, self.state.bufnr, job.id)
@@ -848,17 +890,18 @@ local function jobs_picker(opts)
 			attach_mappings = function(prompt_bufnr, map)
 				local kill_job = function()
 					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
-
 					local job = jobs_list[selection.index]
+					if not job or not job.id then
+						return
+					end
+
 					local is_running = vim.fn.jobwait({ job.id }, 0)[1] == -1
 
 					if is_running then
-						-- Kill the running job
 						vim.fn.jobstop(job.id)
-						-- Remove from background_jobs
-						background_jobs[job.id] = nil
-						vim.notify(string.format("Killed job %d: %s", job.id, job.command), vim.log.levels.INFO)
+						vim.notify(string.format("Killed running job: %s", job.label), vim.log.levels.INFO)
+					else
+						vim.notify(string.format("Removed completed job: %s", job.label), vim.log.levels.INFO)
 					end
 
 					-- Find and delete the buffer associated with this job
@@ -866,21 +909,39 @@ local function jobs_picker(opts)
 						if vim.api.nvim_buf_is_valid(buf_id) then
 							local buf_name = vim.api.nvim_buf_get_name(buf_id)
 							if buf_name:match(vim.pesc(LABEL_PRE .. job.label)) then
-								vim.api.nvim_buf_delete(buf_id, { force = true })
-								break
+								pcall(vim.api.nvim_buf_delete, buf_id, { force = true })
 							end
 						end
 					end
 
-					-- Remove from live_output_buffers if present
+					-- Remove from tracking tables
 					if live_output_buffers[job.id] then
 						live_output_buffers[job.id] = nil
 					end
-				end
+					if background_jobs[job.id] then
+						background_jobs[job.id] = nil
+					end
 
+					-- Update the picker's job list
+					local current_picker = state.get_current_picker(prompt_bufnr)
+
+					-- Rebuild and format jobs list
+					local updated_jobs_list = build_jobs_list()
+					local updated_jobs_formatted = format_jobs_list(updated_jobs_list)
+
+					-- Update the finder with new results
+					current_picker:refresh(
+						finders.new_table({
+							results = updated_jobs_formatted,
+						}),
+						{ reset_prompt = false }
+					)
+
+					-- Update the reference to jobs_list for the picker
+					jobs_list = updated_jobs_list
+				end
 				local toggle_watch_binding = function()
 					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
 					toggle_watch(job.id)
 				end
