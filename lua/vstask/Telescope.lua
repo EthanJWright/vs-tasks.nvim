@@ -23,19 +23,66 @@ local command_history = {}
 local background_jobs = {}
 local job_history = {}
 local live_output_buffers = {} -- Track buffers showing live job output
+local Term_opts = {}
 
-local process_command_background = function(label, command, silent, watch, on_complete)
+local handle_direction = function(direction)
+	local opt_direction = Opts.get_direction(direction, Term_opts)
+	local size = Opts.get_size(direction, Term_opts)
+	local command_map = {
+		vertical = { size = "vertical resize", command = "vsplit" },
+		horizontal = { size = "resize ", command = "split" },
+		tab = { command = "tabnew" },
+	}
+
+	if command_map[opt_direction] ~= nil then
+		vim.cmd(command_map[opt_direction].command)
+		if command_map[opt_direction].size ~= nil and size ~= nil then
+			vim.cmd(command_map[opt_direction].size .. size)
+		end
+	end
+end
+
+local function name_buffer(buf, label)
+	local base_name = "Task: " .. label
+	local name = base_name
+	local counter = 1
+
+	-- Keep trying names until we find one that doesn't exist
+	while true do
+		-- Try to get buffer with current name
+		local existing = vim.fn.bufnr(name)
+		if existing == -1 then
+			-- No buffer with this name exists
+			break
+		end
+		counter = counter + 1
+		name = base_name .. " (" .. counter .. ")"
+	end
+
+	vim.api.nvim_buf_set_name(buf, name)
+end
+
+local start_job = function(opts)
+	-- Default options
+	local options = {
+		label = opts.label,
+		command = opts.command,
+		silent = opts.silent or false,
+		watch = opts.watch or false,
+		on_complete = opts.on_complete,
+		terminal = opts.terminal == nil and true or opts.terminal,
+		direction = opts.direction or "current",
+	}
+
 	local function notify(msg, level)
-		if not silent then
+		if not options.silent then
 			vim.notify(msg, level, { title = "vs-tasks" })
 		end
 	end
 
-	if watch then
+	if options.watch then
 		Add_watch_autocmd()
 	end
-
-	notify("Running in background: " .. command, vim.log.levels.INFO)
 
 	local output = {}
 	local job_id
@@ -81,6 +128,28 @@ local process_command_background = function(label, command, silent, watch, on_co
 				end
 			end
 		end,
+	local open_terminal = options.terminal
+
+	-- Create a new buffer for the terminal
+	local current_buf = vim.api.nvim_get_current_buf()
+	local buf = vim.api.nvim_create_buf(true, false)
+	if open_terminal == true then
+		notify("Starting task..." .. options.label, vim.log.levels.INFO)
+		handle_direction(options.direction)
+	else
+		notify("Starting backgrounded task..." .. options.label, vim.log.levels.INFO)
+	end
+
+	-- show the buffer
+	vim.api.nvim_win_set_buf(0, buf)
+
+	-- Set buffer name after terminal creation
+	vim.schedule(function()
+		name_buffer(buf, options.label)
+	end)
+	job_id = vim.fn.jobstart(options.command, {
+		term = open_terminal,
+		pty = open_terminal,
 		on_exit = function(_, exit_code)
 			local job = background_jobs[job_id]
 
@@ -110,22 +179,27 @@ local process_command_background = function(label, command, silent, watch, on_co
 				})
 				background_jobs[job_id] = nil
 			end
-			if on_complete ~= nil then
-				on_complete()
+			if options.on_complete ~= nil then
+				options.on_complete()
 			end
 		end,
 	})
 
+	if options.terminal ~= true then
+		-- return to current buf
+		vim.api.nvim_set_current_buf(current_buf)
+	end
+
 	if job_id <= 0 then
-		notify("Failed to start background job: " .. command, vim.log.levels.ERROR)
+		notify("Failed to start background job: " .. options.command, vim.log.levels.ERROR)
 	else
 		background_jobs[job_id] = {
 			id = job_id,
-			command = command,
+			command = options.command,
 			start_time = os.time(),
 			output = output,
-			watch = watch,
-			label = label,
+			watch = options.watch,
+			label = options.label,
 			end_time = 0,
 			exit_code = -1,
 		}
@@ -159,7 +233,6 @@ local function set_history(label, command, options)
 end
 
 local last_cmd = nil
-local Term_opts = {}
 
 local function set_term_opts(new_opts)
 	Term_opts = new_opts
@@ -209,13 +282,24 @@ local function run_dependent_tasks(task, task_list)
 			return
 		end
 		local next_task = table.remove(task_queue, 1)
-		process_command_background(next_task.label, next_task.command, false, false, run_next_task)
+		start_job({
+			label = next_task.label,
+			command = next_task.command,
+			silent = false,
+			watch = false,
+			on_complete = run_next_task,
+		})
 	end
 
 	local function run_all_tasks()
 		-- Run all tasks in parallel
 		for _, parallel_task in ipairs(task_queue) do
-			process_command_background(parallel_task.label, parallel_task.command, false, false)
+			start_job({
+				label = parallel_task.label,
+				command = parallel_task.command,
+				silent = false,
+				watch = false,
+			})
 		end
 	end
 
