@@ -842,9 +842,32 @@ local function jobs_picker(opts)
 					actions.close(prompt_bufnr)
 
 					local job = jobs_list[selection.index]
-					vim.fn.jobstop(job.id)
-					vim.notify(string.format("Killed job %d: %s", job.id, job.command), vim.log.levels.INFO)
+					local is_running = vim.fn.jobwait({ job.id }, 0)[1] == -1
+
+					if is_running then
+						-- Kill the running job
+						vim.fn.jobstop(job.id)
+						vim.notify(string.format("Killed job %d: %s", job.id, job.command), vim.log.levels.INFO)
+					end
+
+					-- Find and delete the buffer associated with this job
+					for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+						if vim.api.nvim_buf_is_valid(buf_id) then
+							local buf_name = vim.api.nvim_buf_get_name(buf_id)
+							if buf_name:match(vim.pesc(LABEL_PRE .. job.label)) then
+								vim.api.nvim_buf_delete(buf_id, { force = true })
+								break
+							end
+						end
+					end
+
+					-- Remove from background_jobs
 					background_jobs[job.id] = nil
+
+					-- Remove from live_output_buffers if present
+					if live_output_buffers[job.id] then
+						live_output_buffers[job.id] = nil
+					end
 				end
 
 				local toggle_watch_binding = function()
