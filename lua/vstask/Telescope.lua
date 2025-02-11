@@ -7,7 +7,6 @@ local previewers = require("telescope.previewers")
 local Parse = require("vstask.Parse")
 local Opts = require("vstask.Opts")
 local quickfix = require("vstask.Quickfix")
-local Command_handler = nil
 local Mappings = {
 	vertical = "<C-v>",
 	split = "<C-p>",
@@ -25,7 +24,7 @@ local job_history = {}
 local live_output_buffers = {} -- Track buffers showing live job output
 local Term_opts = {}
 
-local handle_direction = function(direction)
+local split_to_direction = function(direction)
 	local opt_direction = Opts.get_direction(direction, Term_opts)
 	local size = Opts.get_size(direction, Term_opts)
 	local command_map = {
@@ -91,10 +90,9 @@ local start_job = function(opts)
 
 	-- Create a new buffer for the terminal
 	local current_buf = vim.api.nvim_get_current_buf()
-	local buf = vim.api.nvim_create_buf(true, false)
+	local buf = vim.api.nvim_create_buf(open_terminal, true)
 	if open_terminal == true then
-		notify("Starting task..." .. options.label, vim.log.levels.INFO)
-		handle_direction(options.direction)
+		split_to_direction(options.direction)
 	else
 		notify("Starting backgrounded task..." .. options.label, vim.log.levels.INFO)
 	end
@@ -102,13 +100,32 @@ local start_job = function(opts)
 	-- show the buffer
 	vim.api.nvim_win_set_buf(0, buf)
 
+	-- Set up autocmd to keep cursor at bottom of terminal
+	vim.api.nvim_create_autocmd("TermEnter", {
+		buffer = buf,
+		callback = function()
+			vim.cmd("normal! G")
+		end,
+	})
+
+	-- Enable terminal scrolling
+	vim.api.nvim_create_autocmd({ "TermOpen", "TermEnter" }, {
+		buffer = buf,
+		callback = function()
+			-- Enable insert mode and move to bottom
+			vim.cmd("startinsert")
+			vim.opt_local.scrolloff = 0
+			vim.cmd("normal! G")
+		end,
+	})
+
 	-- Set buffer name after terminal creation
 	vim.schedule(function()
 		name_buffer(buf, options.label)
 	end)
 	job_id = vim.fn.jobstart(options.command, {
-		term = open_terminal,
-		pty = open_terminal,
+		term = true,
+		pty = true,
 		on_stdout = function(_, data)
 			if data then
 				vim.list_extend(output, data)
@@ -158,9 +175,9 @@ local start_job = function(opts)
 			end
 
 			if exit_code == 0 then
-				notify("🟢 Background job completed successfully : " .. job.label, vim.log.levels.INFO)
+				notify("🟢 Job completed successfully : " .. job.label, vim.log.levels.INFO)
 			else
-				notify("🔴 Background job failed." .. job.label, vim.log.levels.ERROR)
+				notify("🔴 Job failed." .. job.label, vim.log.levels.ERROR)
 				quickfix.toquickfix(table.concat(output, "\n"))
 			end
 
@@ -380,10 +397,6 @@ local function open_job_output(output, job_id, direction)
 	end
 end
 
-local function set_command_handler(handler)
-	Command_handler = handler
-end
-
 local function inputs(opts)
 	opts = opts or {}
 
@@ -493,7 +506,6 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 
 	if direction == "background_job" or direction == "watch_job" then
 		-- If task has dependencies, run them first
-		vim.notify("Running background job: " .. label, vim.log.levels.INFO)
 		start_job({
 			label = label,
 			command = cleaned,
@@ -933,7 +945,6 @@ return {
 	History = history,
 	Jobs = background_jobs_list,
 	JobHistory = job_history_list,
-	Set_command_handler = set_command_handler,
 	Set_mappings = set_mappings,
 	Set_term_opts = set_term_opts,
 	Get_last = get_last,

@@ -9,9 +9,6 @@ local function config(opts)
 	if opts == nil then
 		return
 	end
-	if opts.terminal ~= nil and opts.terminal == "toggleterm" then
-		M.Telescope.Set_command_handler(require("vstask.ToggleTerm").Process)
-	end
 	if opts.telescope_keys ~= nil then
 		M.Telescope.Set_mappings(opts.telescope_keys)
 	end
