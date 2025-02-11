@@ -201,10 +201,11 @@ local start_job = function(opts)
 
 			if exit_code == 0 then
 				notify("🟢 Job completed successfully : " .. job.label, vim.log.levels.INFO)
+				quickfix.close()
 			else
 				notify("🔴 Job failed." .. job.label, vim.log.levels.ERROR)
 				local content = get_buffer_content(job_id)
-				quickfix.toquickfix(table.concat(content, "\n"))
+				quickfix.toquickfix(content)
 			end
 
 			-- Always record end time and exit code
@@ -723,11 +724,31 @@ local function launches(opts)
 end
 
 local function restart_watched_jobs()
+	-- Store current window, cursor position, and mode
+	local current_win = vim.api.nvim_get_current_win()
+	local current_pos = vim.api.nvim_win_get_cursor(current_win)
+	local current_buf = vim.api.nvim_get_current_buf()
+	local current_mode = vim.api.nvim_get_mode().mode
+
 	for _, job_info in pairs(background_jobs) do
 		if job_info.watch then
 			local command = job_info.command
 			local job_id = job_info.id
-			-- Stop the job and wait for confirmation before starting new one
+			local job_label = job_info.label
+
+			-- Find and delete the buffer associated with this job
+			for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_valid(buf_id) then
+					local buf_name = vim.api.nvim_buf_get_name(buf_id)
+					if buf_name:match(vim.pesc(LABEL_PRE .. job_label)) then
+						-- Force delete the buffer
+						vim.api.nvim_buf_delete(buf_id, { force = true })
+						break
+					end
+				end
+			end
+
+			-- Stop the job
 			vim.fn.jobstop(job_id)
 
 			-- Use timer to ensure job is fully stopped before restarting
@@ -737,18 +758,41 @@ local function restart_watched_jobs()
 				-- Remove from background_jobs to prevent duplicate entries
 				background_jobs[job_id] = nil
 
+				-- Remove from live_output_buffers if present
+				if live_output_buffers[job_id] then
+					live_output_buffers[job_id] = nil
+				end
+
 				-- Job is confirmed stopped, start new one
-				start_job({
-					label = job_info.label,
-					command = command,
-					silent = false,
-					watch = true,
-				})
+				vim.schedule(function()
+					start_job({
+						label = job_label,
+						command = command,
+						silent = false,
+						watch = true,
+						terminal = false, -- Start in background
+					})
+				end)
 			else
 				vim.notify(string.format("Job %d is still running, skipping restart", job_id), vim.log.levels.INFO)
 			end
 		end
 	end
+
+	-- Restore cursor position and mode if we're still in the same buffer
+	vim.schedule(function()
+		if
+			vim.api.nvim_win_is_valid(current_win)
+			and vim.api.nvim_buf_is_valid(current_buf)
+			and vim.api.nvim_win_get_buf(current_win) == current_buf
+		then
+			vim.api.nvim_win_set_cursor(current_win, current_pos)
+			-- If we were in normal mode, ensure we return to it
+			if current_mode == "n" then
+				vim.cmd("stopinsert")
+			end
+		end
+	end)
 end
 
 function Add_watch_autocmd()
