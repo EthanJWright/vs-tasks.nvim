@@ -157,62 +157,90 @@ local function hit_sorter(a, b)
 end
 
 local function time_sorter(a, b)
-	return a.timestamp > b.timestamp
+    -- First compare last_used timestamps
+    if a.last_used and b.last_used then
+        return a.last_used > b.last_used
+    elseif a.last_used then
+        return true
+    elseif b.last_used then
+        return false
+    end
+
+    -- For unused tasks, prioritize by source
+    if a.entry.source ~= b.entry.source then
+        if a.entry.source == "tasks.json" then
+            return true
+        elseif b.entry.source == "tasks.json" then
+            return false
+        end
+    end
+
+    -- Preserve original order using the index
+    return a.original_index < b.original_index
 end
 
 local function cache_scheme(cache_list, fn)
-	local tasks_with_hits = {}
-	local other_tasks = {}
-	for _, task in pairs(cache_list) do
-		if task.hits > 0 then
-			table.insert(tasks_with_hits, task)
-		else
-			table.insert(other_tasks, task)
-		end
-	end
-	-- return tasks in order of most used
-	table.sort(tasks_with_hits, fn)
-	local formatted = {}
-	for _, task in pairs(tasks_with_hits) do
-		table.insert(formatted, task.entry)
-	end
-	for _, task in pairs(other_tasks) do
-		table.insert(formatted, task.entry)
-	end
-	return formatted
+    local used_tasks = {}
+    local unused_tasks = {}
+
+    -- Split tasks into used and unused
+    for _, task in pairs(cache_list) do
+        if task.last_used then
+            table.insert(used_tasks, task)
+        else
+            table.insert(unused_tasks, task)
+        end
+    end
+
+    -- Sort both used and unused tasks by the provided sorting function
+    table.sort(used_tasks, fn)
+    table.sort(unused_tasks, fn)
+
+    -- Combine the lists with used tasks first
+    local formatted = {}
+    for _, task in pairs(used_tasks) do
+        table.insert(formatted, task.entry)
+    end
+    for _, task in pairs(unused_tasks) do
+        table.insert(formatted, task.entry)
+    end
+
+    return formatted
 end
 
 local function manage_cache(cache_list, scheme)
-	if scheme == nil or scheme == "last" then
-		return cache_scheme(cache_list, time_sorter)
-	end
-	if scheme == "most" then
-		return cache_scheme(cache_list, hit_sorter)
-	end
+    if scheme == nil or scheme == "last" then
+        -- Default to sorting by last_used timestamp
+        return cache_scheme(cache_list, time_sorter)
+    end
+    if scheme == "most" then
+        return cache_scheme(cache_list, hit_sorter)
+    end
 end
 
 local function create_cache(raw_list, key)
-	local new_cache = {}
-	for _, entry in pairs(raw_list) do
-		local cache_key = entry[key]
-		if cache_key then
-			new_cache[cache_key] = { entry = entry, hits = 0, timestamp = os.time() }
-		end
-	end
-	return new_cache
+    local new_cache = {}
+    for index, entry in ipairs(raw_list) do
+        local cache_key = entry[key]
+        if cache_key then
+            new_cache[cache_key] = {
+                entry = entry,
+                hits = 0,
+                timestamp = os.time(),
+                last_used = nil,
+                original_index = index  -- Track original position
+            }
+        end
+    end
+    return new_cache
 end
 
 local function update_cache(cache, key)
-	if cache == nil then
-		return
-	end
-	if cache[key] == nil then
-		return
-	end
-	if cache[key] ~= nil then
-		cache[key].hits = cache[key].hits + 1
-		cache[key].timestamp = os.time()
-	end
+    if cache == nil or cache[key] == nil then
+        return
+    end
+    cache[key].hits = cache[key].hits + 1
+    cache[key].last_used = os.time()
 end
 
 local function auto_detect_npm()
@@ -271,6 +299,7 @@ local function get_tasks()
 		end
 
 		for _, task in pairs(tasks["tasks"]) do
+			task.source = "tasks.json"  -- Mark tasks from tasks.json
 			table.insert(task_list, task)
 		end
 		::continue::
@@ -279,6 +308,7 @@ local function get_tasks()
 	-- add script_tasks to Tasks
 	local script_tasks = auto_detect_npm()
 	for _, task in pairs(script_tasks) do
+		task.source = "npm"  -- Mark tasks from npm
 		table.insert(task_list, task)
 	end
 	-- add each task to cached while initializing 'hits' as 0

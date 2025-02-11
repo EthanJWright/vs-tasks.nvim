@@ -541,6 +541,11 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		end
 	end
 
+	-- Update task usage tracking before running
+	if task then
+		Parse.Used_task(task.label)
+	end
+
 	if task and task.dependsOn then
 		run_dependent_tasks(task, selection_list)
 		return
