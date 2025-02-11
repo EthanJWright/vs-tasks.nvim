@@ -21,6 +21,12 @@
   ],
   "tasks": [
     {
+      "command": "echo moooo | cowsay",
+      "label": "🐮 Cowsay No Input",
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
       "command": "echo ${input:phrase} | cowsay",
       "label": "🐮 Cowsay",
       "problemMatcher": [],
