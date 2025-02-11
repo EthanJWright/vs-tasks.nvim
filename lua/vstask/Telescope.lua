@@ -380,29 +380,6 @@ local function open_job_output(output, job_id, direction)
 	end
 end
 
-local process_command = function(command, direction, opts)
-	last_cmd = command
-	if Command_handler ~= nil then
-		Command_handler(command, direction, opts)
-	else
-		local opt_direction = Opts.get_direction(direction, opts)
-		local size = Opts.get_size(direction, opts)
-		local command_map = {
-			vertical = { size = "vertical resize", command = "vsplit" },
-			horizontal = { size = "resize ", command = "split" },
-			tab = { command = "tabnew" },
-		}
-
-		if command_map[opt_direction] ~= nil then
-			vim.cmd(command_map[opt_direction].command)
-			if command_map[opt_direction].size ~= nil and size ~= nil then
-				vim.cmd(command_map[opt_direction].size .. size)
-			end
-		end
-		vim.cmd(string.format('terminal echo "%s" && %s', command, command))
-	end
-end
-
 local function set_command_handler(handler)
 	Command_handler = handler
 end
@@ -510,21 +487,30 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 	end
 
 	if task and task.dependsOn then
-		run_dependent_tasks(task, selection_list, function()
-			process_command_background(label, cleaned, false, direction == "watch_job")
-		end)
+		run_dependent_tasks(task, selection_list)
 		return
 	end
 
 	if direction == "background_job" or direction == "watch_job" then
 		-- If task has dependencies, run them first
-		process_command_background(label, cleaned, false, direction == "watch_job")
+		vim.notify("Running background job: " .. label, vim.log.levels.INFO)
+		start_job({
+			label = label,
+			command = cleaned,
+			silent = false,
+			watch = direction == "watch_job",
+			terminal = false,
+		})
 	else
 		local process = function(prepared_command)
-			process_command(prepared_command, direction, Term_opts)
-			if direction ~= "current" then
-				vim.cmd("normal! G")
-			end
+			start_job({
+				label = label,
+				command = prepared_command,
+				silent = false,
+				watch = false,
+				terminal = true,
+				direction = direction,
+			})
 		end
 		Parse.replace_and_run(cleaned, process, opts)
 	end
@@ -722,7 +708,12 @@ local function restart_watched_jobs()
 				background_jobs[job_id] = nil
 
 				-- Job is confirmed stopped, start new one
-				process_command_background(job_info.label, command, false, true)
+				start_job({
+					label = job_info.label,
+					command = command,
+					silent = false,
+					watch = true,
+				})
 			else
 				vim.notify(string.format("Job %d is still running, skipping restart", job_id), vim.log.levels.INFO)
 			end
