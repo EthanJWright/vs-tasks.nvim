@@ -134,12 +134,23 @@ local start_job = function(opts)
 	-- show the buffer
 	vim.api.nvim_win_set_buf(0, buf)
 
-	-- Enable terminal scrolling
+	-- Enable terminal scrolling and set buffer options
 	vim.api.nvim_create_autocmd("TermOpen", {
 		buffer = buf,
 		callback = function()
 			-- Set terminal options
 			vim.opt_local.scrolloff = 0
+
+			-- Apply buffer options from Parse if they exist
+			local buffer_options = Parse.buffer_options
+			if buffer_options then
+				local win = vim.api.nvim_get_current_win()
+				for _, option in ipairs(buffer_options) do
+					-- Set window-local options directly on the window
+					vim.wo[win][option] = true
+				end
+			end
+
 			-- Start in terminal mode
 			vim.cmd("startinsert")
 			-- Scroll to bottom

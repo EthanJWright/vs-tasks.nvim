@@ -3,6 +3,11 @@ local Config = require("vstask.Config")
 local Predefined = require("vstask.Predefined")
 
 local cache_json_conf = true
+local buffer_options = { "relativenumber" }
+
+local function set_buffer_options(opts)
+  buffer_options = opts
+end
 
 local function set_cache_json_conf(value)
 	cache_json_conf = value
@@ -524,4 +529,6 @@ return {
 	Set_config_dir = set_config_dir,
 	Set_json_parser = set_json_parser,
   Clear_inputs = clear_inputs,
+  Set_buffer_options = set_buffer_options,
+  buffer_options = buffer_options,
 }

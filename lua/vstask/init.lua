@@ -30,6 +30,9 @@ local function config(opts)
 	if opts.json_parser ~= nil then
 		M.Parse.Set_json_parser(opts.json_parser)
 	end
+	if opts.buffer_options ~= nil then
+		M.Parse.Set_buffer_options(opts.buffer_options)
+	end
 end
 
 M.config = function(opts)
