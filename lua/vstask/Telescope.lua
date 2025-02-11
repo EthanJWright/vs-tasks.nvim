@@ -24,6 +24,16 @@ local job_history = {}
 local live_output_buffers = {} -- Track buffers showing live job output
 local Term_opts = {}
 
+local function scroll_to_bottom(win_id)
+	if win_id and win_id ~= -1 then
+		local buf = vim.api.nvim_win_get_buf(win_id)
+		local line_count = vim.api.nvim_buf_line_count(buf)
+		if line_count > 0 then
+			vim.api.nvim_win_set_cursor(win_id, { line_count, 0 })
+		end
+	end
+end
+
 local split_to_direction = function(direction)
 	local opt_direction = Opts.get_direction(direction, Term_opts)
 	local size = Opts.get_size(direction, Term_opts)
@@ -41,24 +51,52 @@ local split_to_direction = function(direction)
 	end
 end
 
-local function name_buffer(buf, label)
-	local base_name = "Task: " .. label
-	local name = base_name
-	local counter = 1
+local LABEL_PRE = "Task: "
 
-	-- Keep trying names until we find one that doesn't exist
-	while true do
-		-- Try to get buffer with current name
-		local existing = vim.fn.bufnr(name)
-		if existing == -1 then
-			-- No buffer with this name exists
-			break
+local function get_buf_counter(label)
+	local base_name = LABEL_PRE .. label
+	local max_counter = 1
+
+	-- Find highest existing counter and check for base name
+	for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(buf_id) then
+			local buf_name = vim.api.nvim_buf_get_name(buf_id)
+			if string.find(buf_name, base_name) then
+				max_counter = max_counter + 1
+			end
 		end
-		counter = counter + 1
-		name = base_name .. " (" .. counter .. ")"
 	end
 
+	if max_counter == 1 then
+		return base_name
+	else
+		return base_name .. " (" .. max_counter .. ")"
+	end
+end
+
+local function name_buffer(buf, label)
+	local name = get_buf_counter(label)
 	vim.api.nvim_buf_set_name(buf, name)
+end
+
+-- Function to get terminal buffer content
+local function get_buffer_content(buf_job_id)
+	-- Check if job exists
+	if not buf_job_id or not background_jobs[buf_job_id] then
+		return {}
+	end
+
+	-- Find the terminal buffer for this job
+	for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(buf_id) then
+			local buf_name = vim.api.nvim_buf_get_name(buf_id)
+			local job_label = background_jobs[buf_job_id].label
+			if buf_name:match(vim.pesc(LABEL_PRE .. job_label)) then
+				return vim.api.nvim_buf_get_lines(buf_id, 0, -1, false)
+			end
+		end
+	end
+	return {}
 end
 
 local start_job = function(opts)
@@ -83,9 +121,7 @@ local start_job = function(opts)
 		Add_watch_autocmd()
 	end
 
-	local output = {}
 	local job_id
-
 	local open_terminal = options.terminal
 
 	-- Create a new buffer for the terminal
@@ -94,28 +130,22 @@ local start_job = function(opts)
 	if open_terminal == true then
 		split_to_direction(options.direction)
 	else
-		notify("Starting backgrounded task..." .. options.label, vim.log.levels.INFO)
+		notify("Starting backgrounded task... " .. options.label, vim.log.levels.INFO)
 	end
 
 	-- show the buffer
 	vim.api.nvim_win_set_buf(0, buf)
 
-	-- Set up autocmd to keep cursor at bottom of terminal
-	vim.api.nvim_create_autocmd("TermEnter", {
-		buffer = buf,
-		callback = function()
-			vim.cmd("normal! G")
-		end,
-	})
-
 	-- Enable terminal scrolling
-	vim.api.nvim_create_autocmd({ "TermOpen", "TermEnter" }, {
+	vim.api.nvim_create_autocmd("TermOpen", {
 		buffer = buf,
 		callback = function()
-			-- Enable insert mode and move to bottom
-			vim.cmd("startinsert")
+			-- Set terminal options
 			vim.opt_local.scrolloff = 0
-			vim.cmd("normal! G")
+			-- Start in terminal mode
+			vim.cmd("startinsert")
+			-- Scroll to bottom
+			scroll_to_bottom(vim.api.nvim_get_current_win())
 		end,
 	})
 
@@ -127,20 +157,17 @@ local start_job = function(opts)
 		term = true,
 		pty = true,
 		on_stdout = function(_, data)
-			if data then
-				vim.list_extend(output, data)
-				-- Update live output buffer if it exists
-				if live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
-					vim.schedule(function()
-						vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, output)
-						-- Always scroll to bottom for live updates
-						local win = vim.fn.bufwinid(live_output_buffers[job_id])
-						if win ~= -1 then
-							local line_count = vim.api.nvim_buf_line_count(live_output_buffers[job_id])
-							vim.api.nvim_win_set_cursor(win, { line_count, 0 })
-						end
-					end)
-				end
+			if data and live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
+				vim.schedule(function()
+					-- Copy terminal buffer content to live output buffer
+					local content = get_buffer_content(job_id)
+					vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, content)
+
+					-- Always scroll to bottom for live updates
+					local win = vim.fn.bufwinid(live_output_buffers[job_id])
+					scroll_to_bottom(win)
+				end)
+
 				-- Trigger update for preview buffers
 				vim.schedule(function()
 					vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
@@ -148,23 +175,22 @@ local start_job = function(opts)
 			end
 		end,
 		on_stderr = function(_, data)
-			if data then
-				vim.list_extend(output, data)
-				-- Update live output buffer if it exists
-				if live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
-					vim.schedule(function()
-						vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, output)
-						-- Scroll to bottom if cursor was at bottom
-						local win = vim.fn.bufwinid(live_output_buffers[job_id])
-						if win ~= -1 then
-							local curr_line = vim.api.nvim_win_get_cursor(win)[1]
-							local line_count = vim.api.nvim_buf_line_count(live_output_buffers[job_id])
-							if curr_line >= line_count - 5 then
-								vim.api.nvim_win_set_cursor(win, { line_count, 0 })
-							end
+			if data and live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
+				vim.schedule(function()
+					-- Copy terminal buffer content to live output buffer
+					local content = get_buffer_content(job_id)
+					vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, content)
+
+					-- Scroll to bottom if cursor was at bottom
+					local win = vim.fn.bufwinid(live_output_buffers[job_id])
+					if win ~= -1 then
+						local curr_line = vim.api.nvim_win_get_cursor(win)[1]
+						local line_count = vim.api.nvim_buf_line_count(live_output_buffers[job_id])
+						if curr_line >= line_count - 5 then
+							scroll_to_bottom(win)
 						end
-					end)
-				end
+					end
+				end)
 			end
 		end,
 		on_exit = function(_, exit_code)
@@ -178,7 +204,8 @@ local start_job = function(opts)
 				notify("🟢 Job completed successfully : " .. job.label, vim.log.levels.INFO)
 			else
 				notify("🔴 Job failed." .. job.label, vim.log.levels.ERROR)
-				quickfix.toquickfix(table.concat(output, "\n"))
+				local content = get_buffer_content(job_id)
+				quickfix.toquickfix(table.concat(content, "\n"))
 			end
 
 			-- Always record end time and exit code
@@ -187,12 +214,16 @@ local start_job = function(opts)
 
 			-- Add to history unless it's a watch job
 			if not job.watch then
+				-- Get final output from terminal buffer
+				local content = get_buffer_content(job_id)
+				-- Store the content before removing the job
+				local stored_content = vim.deepcopy(content)
 				table.insert(job_history, {
 					label = job.label,
 					end_time = os.time(),
 					start_time = job.start_time or os.time(), -- Ensure we always have a start_time
 					exit_code = exit_code,
-					output = job.output,
+					output = stored_content,
 				})
 				background_jobs[job_id] = nil
 			end
@@ -203,8 +234,10 @@ local start_job = function(opts)
 	})
 
 	if options.terminal ~= true then
-		-- return to current buf
-		vim.api.nvim_set_current_buf(current_buf)
+		-- return to current buf if it's still valid
+		if vim.api.nvim_buf_is_valid(current_buf) then
+			vim.api.nvim_set_current_buf(current_buf)
+		end
 	end
 
 	if job_id <= 0 then
@@ -214,7 +247,7 @@ local start_job = function(opts)
 			id = job_id,
 			command = options.command,
 			start_time = os.time(),
-			output = output,
+			output = get_buffer_content(job_id),
 			watch = options.watch,
 			label = options.label,
 			end_time = 0,
@@ -338,62 +371,48 @@ local function toggle_watch(id)
 end
 
 local function preview_job_output(output, bufnr, job_id)
-	local max_lines = 1000 -- Show last 1000 lines
-	local start_idx = #output > max_lines and #output - max_lines or 0
-	local recent_output = vim.list_slice(output, start_idx + 1)
+	if not vim.api.nvim_buf_is_valid(bufnr) then
+		return
+	end
+
+	-- Ensure output is a table
+	local lines = type(output) == "table" and output or {}
+
+	-- Get last 1000 lines
+	local max_lines = 1000
+	local start_idx = #lines > max_lines and #lines - max_lines or 0
+	local recent_output = vim.list_slice(lines, start_idx + 1)
+
+	-- Set the lines in the preview buffer
+	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, recent_output)
+	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 	vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
+
 	-- Scroll to bottom of preview
 	vim.schedule(function()
 		local win = vim.fn.bufwinid(bufnr)
 		if win ~= -1 then
-			vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(bufnr), 0 })
-			vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
+			local line_count = vim.api.nvim_buf_line_count(bufnr)
+			if line_count > 0 then
+				vim.api.nvim_win_set_cursor(win, { line_count, 0 })
+			end
 		end
 	end)
 
 	-- Set up live updates for preview if job is running
-	if job_id then
-		local job = background_jobs[job_id]
-		if job then
-			-- Create autocmd to update preview buffer
-			vim.api.nvim_create_autocmd("User", {
-				pattern = "VsTaskJobOutput",
-				callback = function()
-					if vim.api.nvim_buf_is_valid(bufnr) then
-						preview_job_output(job.output, bufnr)
-					end
-				end,
-			})
-		end
-	end
-end
-local function open_job_output(output, job_id, direction)
-	local buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
-
-	if direction == "vertical" then
-		vim.cmd("vsplit")
-	end
-
-	vim.api.nvim_win_set_buf(0, buf)
-	vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
-
-	-- Set buffer name to indicate live status
-	if job_id then
-		local job = background_jobs[job_id]
-		if job then
-			vim.api.nvim_buf_set_name(buf, string.format("Job Output - %s (Live)", job.label))
-			live_output_buffers[job_id] = buf
-
-			-- Set buffer local autocmd to clean up when buffer is closed
-			vim.api.nvim_create_autocmd("BufWipeout", {
-				buffer = buf,
-				callback = function()
-					live_output_buffers[job_id] = nil
-				end,
-			})
-		end
+	if job_id and background_jobs[job_id] then
+		-- Remove any existing autocmds for this buffer
+		vim.api.nvim_create_autocmd("User", {
+			pattern = "VsTaskJobOutput",
+			callback = function()
+				if vim.api.nvim_buf_is_valid(bufnr) then
+					-- Get fresh content from terminal buffer
+					local content = get_buffer_content(job_id)
+					preview_job_output(content, bufnr)
+				end
+			end,
+		})
 	end
 end
 
@@ -779,6 +798,23 @@ local function format_job_entry(job_info, is_running)
 	return formatted
 end
 
+local function open_buffer(label)
+	-- Find the terminal buffer for this job
+	for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(buf_id) then
+			local buf_name = vim.api.nvim_buf_get_name(buf_id)
+			if buf_name:match(vim.pesc(LABEL_PRE .. label)) then
+				vim.api.nvim_win_set_buf(0, buf_id)
+				-- Schedule scrolling to bottom to ensure buffer is loaded
+				vim.schedule(function()
+					scroll_to_bottom(vim.api.nvim_get_current_win())
+				end)
+				return
+			end
+		end
+	end
+end
+
 local function background_jobs_list(opts)
 	opts = opts or {}
 
@@ -813,7 +849,18 @@ local function background_jobs_list(opts)
 				title = "Job Output",
 				define_preview = function(self, entry)
 					local job = jobs_list[entry.index]
-					local output = job.output or {}
+					if not job then
+						return
+					end
+
+					-- For running jobs, get fresh content from terminal
+					local output
+					if background_jobs[job.id] then
+						output = get_buffer_content(job.id)
+					else
+						output = job.output or {}
+					end
+
 					preview_job_output(output, self.state.bufnr, job.id)
 				end,
 			}),
@@ -839,24 +886,33 @@ local function background_jobs_list(opts)
 					local selection = state.get_selected_entry(prompt_bufnr)
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
-					local output = job.output or {}
-					open_job_output(output, job.id)
+					open_buffer(job.label)
 				end
 
-				local open_in_temp_buffer_vertical = function()
+				local open_vertical = function()
 					local selection = state.get_selected_entry(prompt_bufnr)
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
-					local output = job.output or {}
-					open_job_output(output, job.id, "vertical")
+					split_to_direction("vertical")
+					open_buffer(job.label)
+				end
+
+				local open_horizontal = function()
+					local selection = state.get_selected_entry(prompt_bufnr)
+					actions.close(prompt_bufnr)
+					local job = jobs_list[selection.index]
+					split_to_direction("horizontal")
+					open_buffer(job.label)
 				end
 
 				map("i", Mappings.kill_job, kill_job)
 				map("n", Mappings.kill_job, kill_job)
 				map("i", Mappings.current, open_history)
 				map("n", Mappings.current, open_history)
-				map("i", Mappings.split, open_in_temp_buffer_vertical)
-				map("n", Mappings.split, open_in_temp_buffer_vertical)
+				map("i", Mappings.split, open_horizontal)
+				map("n", Mappings.split, open_horizontal)
+				map("i", Mappings.vertical, open_vertical)
+				map("n", Mappings.vertical, open_vertical)
 				map("i", Mappings.watch_job, toggle_watch_binding)
 				map("n", Mappings.watch_job, toggle_watch_binding)
 
@@ -895,10 +951,18 @@ local function job_history_list(opts)
 			}),
 			sorter = sorters.get_generic_fuzzy_sorter(),
 			previewer = previewers.new_buffer_previewer({
-				title = "Job Info",
+				title = "Job History",
 				define_preview = function(self, entry)
-					local job = job_history[entry.index]
+					local job = sorted_history[entry.index]
+					if not job then
+						return
+					end
+
+					-- For completed jobs, use stored output
 					local output = job.output or {}
+					if type(output) == "string" then
+						output = vim.split(output, "\n")
+					end
 					preview_job_output(output, self.state.bufnr)
 				end,
 			}),
@@ -906,30 +970,25 @@ local function job_history_list(opts)
 				local function open_in_temp_buffer()
 					local selection = state.get_selected_entry(prompt_bufnr)
 					actions.close(prompt_bufnr)
-					local job = job_history[selection.index]
-					local output = job.output or {}
-					local buf = vim.api.nvim_create_buf(false, true)
-					vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
-					vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
-					vim.api.nvim_win_set_buf(0, buf)
+					local job = sorted_history[selection.index]
+					if not job then
+						return
+					end
+					open_buffer(job.label)
 				end
 
-				local function open_in_temp_buffer_vertical()
+				local function open_vertical()
 					local selection = state.get_selected_entry(prompt_bufnr)
 					actions.close(prompt_bufnr)
 					local job = job_history[selection.index]
-					vim.cmd("vsplit")
-					local output = job.output or {}
-					local buf = vim.api.nvim_create_buf(false, true)
-					vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
-					vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
-					vim.api.nvim_win_set_buf(0, buf)
+					split_to_direction("vertical")
+					open_buffer(job.label)
 				end
 
 				map("i", Mappings.current, open_in_temp_buffer)
 				map("n", Mappings.current, open_in_temp_buffer)
-				map("i", Mappings.vertical, open_in_temp_buffer_vertical)
-				map("n", Mappings.vertical, open_in_temp_buffer_vertical)
+				map("i", Mappings.vertical, open_vertical)
+				map("n", Mappings.vertical, open_vertical)
 
 				return true
 			end,
