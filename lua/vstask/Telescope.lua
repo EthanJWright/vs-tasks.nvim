@@ -808,13 +808,13 @@ local function jobs_picker(opts)
 
 	pickers
 		.new(opts, {
-			prompt_title = "Background Jobs",
+			prompt_title = "Jobs",
 			finder = finders.new_table({
 				results = jobs_formatted,
 			}),
 			sorter = sorters.get_generic_fuzzy_sorter(),
 			previewer = previewers.new_buffer_previewer({
-				title = "Job Output",
+				title = "Jobs",
 				define_preview = function(self, entry)
 					local job = jobs_list[entry.index]
 					if not job then
