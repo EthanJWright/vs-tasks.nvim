@@ -191,13 +191,19 @@ local start_job = function(opts)
 		on_stdout = function(_, data)
 			if data and live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
 				vim.schedule(function()
-					-- Copy terminal buffer content to live output buffer
-					local content = get_buffer_content(job_id)
-					vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, content)
+					if vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
+						-- Copy terminal buffer content to live output buffer
+						local content = get_buffer_content(job_id)
+						pcall(function()
+							vim.api.nvim_buf_set_option(live_output_buffers[job_id], "modifiable", true)
+							vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, content)
+							vim.api.nvim_buf_set_option(live_output_buffers[job_id], "modifiable", false)
+						end)
 
-					-- Always scroll to bottom for live updates
-					local win = vim.fn.bufwinid(live_output_buffers[job_id])
-					scroll_to_bottom(win)
+						-- Always scroll to bottom for live updates
+						local win = vim.fn.bufwinid(live_output_buffers[job_id])
+						scroll_to_bottom(win)
+					end
 				end)
 
 				-- Trigger update for preview buffers
@@ -209,17 +215,23 @@ local start_job = function(opts)
 		on_stderr = function(_, data)
 			if data and live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
 				vim.schedule(function()
-					-- Copy terminal buffer content to live output buffer
-					local content = get_buffer_content(job_id)
-					vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, content)
+					if vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
+						-- Copy terminal buffer content to live output buffer
+						local content = get_buffer_content(job_id)
+						pcall(function()
+							vim.api.nvim_buf_set_option(live_output_buffers[job_id], "modifiable", true)
+							vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, content)
+							vim.api.nvim_buf_set_option(live_output_buffers[job_id], "modifiable", false)
+						end)
 
-					-- Scroll to bottom if cursor was at bottom
-					local win = vim.fn.bufwinid(live_output_buffers[job_id])
-					if win ~= -1 then
-						local curr_line = vim.api.nvim_win_get_cursor(win)[1]
-						local line_count = vim.api.nvim_buf_line_count(live_output_buffers[job_id])
-						if curr_line >= line_count - 5 then
-							scroll_to_bottom(win)
+						-- Scroll to bottom if cursor was at bottom
+						local win = vim.fn.bufwinid(live_output_buffers[job_id])
+						if win ~= -1 then
+							local curr_line = vim.api.nvim_win_get_cursor(win)[1]
+							local line_count = vim.api.nvim_buf_line_count(live_output_buffers[job_id])
+							if curr_line >= line_count - 5 then
+								scroll_to_bottom(win)
+							end
 						end
 					end
 				end)
@@ -403,27 +415,90 @@ local function preview_job_output(output, bufnr, job_id)
 	local start_idx = #lines > max_lines and #lines - max_lines or 0
 	local recent_output = vim.list_slice(lines, start_idx + 1)
 
+	-- Filter out empty lines and trim whitespace
+	local filtered_output = {}
+	local last_non_empty = 0
+	for i, line in ipairs(recent_output) do
+		-- Trim whitespace from both ends
+		line = vim.trim(line)
+		if line ~= "" then
+			filtered_output[#filtered_output + 1] = line
+			last_non_empty = #filtered_output
+		elseif i < #recent_output then
+			-- Keep at most one empty line between content
+			filtered_output[#filtered_output + 1] = line
+		end
+	end
+
 	-- Trim trailing empty lines
-	while #recent_output > 0 and recent_output[#recent_output] == "" do
-		table.remove(recent_output)
+	if last_non_empty > 0 then
+		filtered_output = vim.list_slice(filtered_output, 1, last_non_empty)
+	end
+
+	-- Add padding at the top to center content
+	local win = vim.fn.bufwinid(bufnr)
+	if win ~= -1 then
+		local win_height = vim.api.nvim_win_get_height(win)
+		local content_height = #filtered_output
+		local padding_lines = math.floor((win_height - content_height) / 2)
+		if padding_lines > 0 then
+			for _ = 1, padding_lines do
+				table.insert(filtered_output, 1, "")
+			end
+		end
 	end
 
 	-- Set the lines in the preview buffer
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", true)
-	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, recent_output)
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, filtered_output)
 	vim.api.nvim_buf_set_option(bufnr, "modifiable", false)
 	vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
 
-	-- Scroll to bottom of preview
+	-- Center the content in the preview window
 	vim.schedule(function()
-		local win = vim.fn.bufwinid(bufnr)
-		if win ~= -1 then
+		local preview_win = vim.fn.bufwinid(bufnr)
+		if preview_win ~= -1 then
 			local line_count = vim.api.nvim_buf_line_count(bufnr)
 			if line_count > 0 then
-				vim.api.nvim_win_set_cursor(win, { line_count, 0 })
+				-- Set cursor position to start of content (after padding)
+				local win_height = vim.api.nvim_win_get_height(preview_win)
+				local content_start = math.floor((win_height - #filtered_output) / 2) + 1
+
+				-- Ensure cursor position is within valid range
+				content_start = math.max(1, math.min(content_start, line_count))
+
+				pcall(function()
+					vim.api.nvim_win_set_cursor(preview_win, { content_start, 0 })
+					-- Adjust the window view to center the content
+					vim.api.nvim_win_call(preview_win, function()
+						vim.cmd("normal! zz")
+					end)
+				end)
 			end
 		end
 	end)
+
+	-- Set up live updates for preview if job is running
+	if is_job_running(job_id) then
+		local group_name = string.format("VsTaskPreview_%d", job_id)
+		vim.api.nvim_create_augroup(group_name, { clear = true })
+
+		vim.api.nvim_create_autocmd("User", {
+			group = group_name,
+			pattern = "VsTaskJobOutput",
+			callback = function()
+				if vim.api.nvim_buf_is_valid(bufnr) then
+					local content = get_buffer_content(job_id)
+					if content then
+						preview_job_output(content, bufnr, job_id)
+					end
+				end
+			end,
+		})
+
+		-- Store the preview buffer in live_output_buffers
+		live_output_buffers[job_id] = bufnr
+	end
 
 	-- Set up live updates for preview if job is running
 	if is_job_running(job_id) then
@@ -882,6 +957,26 @@ local function jobs_picker(opts)
 						-- For running jobs, get fresh content from terminal
 						output = get_buffer_content(job.id)
 						preview_job_output(output, self.state.bufnr, job.id)
+
+						-- Set up live updates for this preview buffer
+						local group_name = string.format("VsTaskPreview_%d", job.id)
+						vim.api.nvim_create_augroup(group_name, { clear = true })
+
+						vim.api.nvim_create_autocmd("User", {
+							group = group_name,
+							pattern = "VsTaskJobOutput",
+							callback = function()
+								if vim.api.nvim_buf_is_valid(self.state.bufnr) then
+									local content = get_buffer_content(job.id)
+									if content then
+										preview_job_output(content, self.state.bufnr, job.id)
+									end
+								end
+							end,
+						})
+
+						-- Store the preview buffer in live_output_buffers
+						live_output_buffers[job.id] = self.state.bufnr
 					else
 						-- For completed jobs, use stored output
 						output = job.output or {}
