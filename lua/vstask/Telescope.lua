@@ -20,7 +20,6 @@ local Mappings = {
 
 local command_history = {}
 local background_jobs = {}
-local job_history = {}
 local live_output_buffers = {} -- Track buffers showing live job output
 local Term_opts = {}
 
@@ -212,20 +211,20 @@ local start_job = function(opts)
 			background_jobs[job_id].end_time = os.time()
 			background_jobs[job_id].exit_code = exit_code
 
-			-- Add to history unless it's a watch job
+			-- Keep completed job in background_jobs unless it's a watch job
 			if not job.watch then
 				-- Get final output from terminal buffer
 				local content = get_buffer_content(job_id)
-				-- Store the content before removing the job
-				local stored_content = vim.deepcopy(content)
-				table.insert(job_history, {
+				-- Update the job with final state
+				background_jobs[job_id] = {
 					label = job.label,
 					end_time = os.time(),
-					start_time = job.start_time or os.time(), -- Ensure we always have a start_time
+					start_time = job.start_time or os.time(),
 					exit_code = exit_code,
-					output = stored_content,
-				})
-				background_jobs[job_id] = nil
+					output = vim.deepcopy(content),
+					command = job.command,
+					completed = true, -- Mark as completed
+				}
 			end
 			if options.on_complete ~= nil then
 				options.on_complete()
@@ -775,9 +774,9 @@ end
 local function format_job_entry(job_info, is_running)
 	local runtime
 	if is_running then
-		runtime = os.time() - job_info.start_time - (job_info.end_time or 0)
+		runtime = os.time() - job_info.start_time
 	else
-		runtime = job_info.end_time - job_info.start_time
+		runtime = (job_info.end_time or os.time()) - job_info.start_time
 	end
 
 	local formatted = string.format("%s - (runtime %ds)", job_info.label, runtime)
@@ -821,19 +820,19 @@ local function background_jobs_list(opts)
 	local jobs_list = {}
 	local jobs_formatted = {}
 
+	-- Add all jobs (both running and completed)
 	for job_id, job_info in pairs(background_jobs) do
+		local is_running = not job_info.completed and vim.fn.jobwait({ job_id }, 0)[1] == -1
 		table.insert(jobs_list, job_info)
-		local job_status = vim.fn.jobwait({ job_id }, 0)[1]
-		local is_running = job_status == -1
 		table.insert(jobs_formatted, format_job_entry(job_info, is_running))
 	end
 
 	if vim.tbl_isempty(jobs_formatted) then
-		vim.notify("No background jobs running", vim.log.levels.INFO)
+		vim.notify("No jobs available", vim.log.levels.INFO)
 		return
 	end
 
-	-- Sort jobs_list by start_time (most recent first)
+	-- Sort all jobs by start_time (most recent first)
 	table.sort(jobs_list, function(a, b)
 		return a.start_time > b.start_time
 	end)
@@ -853,15 +852,19 @@ local function background_jobs_list(opts)
 						return
 					end
 
-					-- For running jobs, get fresh content from terminal
 					local output
-					if background_jobs[job.id] then
+					if job.id and background_jobs[job.id] then
+						-- For running jobs, get fresh content from terminal
 						output = get_buffer_content(job.id)
+						preview_job_output(output, self.state.bufnr, job.id)
 					else
+						-- For completed jobs, use stored output
 						output = job.output or {}
+						if type(output) == "string" then
+							output = vim.split(output, "\n")
+						end
+						preview_job_output(output, self.state.bufnr)
 					end
-
-					preview_job_output(output, self.state.bufnr, job.id)
 				end,
 			}),
 			attach_mappings = function(prompt_bufnr, map)
@@ -922,80 +925,6 @@ local function background_jobs_list(opts)
 		:find()
 end
 
-local function job_history_list(opts)
-	opts = opts or {}
-
-	if vim.tbl_isempty(job_history) then
-		vim.notify("No job history available", vim.log.levels.INFO)
-		return
-	end
-
-	-- Create a copy of job_history to avoid modifying the original
-	local sorted_history = vim.deepcopy(job_history)
-
-	-- Sort by start_time (most recent first)
-	table.sort(sorted_history, function(a, b)
-		return a.start_time > b.start_time
-	end)
-
-	local jobs_formatted = {}
-	for _, job_info in ipairs(sorted_history) do
-		table.insert(jobs_formatted, format_job_entry(job_info, false))
-	end
-
-	pickers
-		.new(opts, {
-			prompt_title = "Job History",
-			finder = finders.new_table({
-				results = jobs_formatted,
-			}),
-			sorter = sorters.get_generic_fuzzy_sorter(),
-			previewer = previewers.new_buffer_previewer({
-				title = "Job History",
-				define_preview = function(self, entry)
-					local job = sorted_history[entry.index]
-					if not job then
-						return
-					end
-
-					-- For completed jobs, use stored output
-					local output = job.output or {}
-					if type(output) == "string" then
-						output = vim.split(output, "\n")
-					end
-					preview_job_output(output, self.state.bufnr)
-				end,
-			}),
-			attach_mappings = function(prompt_bufnr, map)
-				local function open_in_temp_buffer()
-					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
-					local job = sorted_history[selection.index]
-					if not job then
-						return
-					end
-					open_buffer(job.label)
-				end
-
-				local function open_vertical()
-					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
-					local job = job_history[selection.index]
-					split_to_direction("vertical")
-					open_buffer(job.label)
-				end
-
-				map("i", Mappings.current, open_in_temp_buffer)
-				map("n", Mappings.current, open_in_temp_buffer)
-				map("i", Mappings.vertical, open_vertical)
-				map("n", Mappings.vertical, open_vertical)
-
-				return true
-			end,
-		})
-		:find()
-end
-
 return {
 	Launch = launches,
 	Tasks = tasks,
@@ -1003,7 +932,6 @@ return {
 	Inputs = inputs,
 	History = history,
 	Jobs = background_jobs_list,
-	JobHistory = job_history_list,
 	Set_mappings = set_mappings,
 	Set_term_opts = set_term_opts,
 	Get_last = get_last,
