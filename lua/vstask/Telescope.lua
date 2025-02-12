@@ -244,6 +244,10 @@ local start_job = function(opts)
 				return
 			end
 
+			vim.schedule(function()
+				vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
+			end)
+
 			if exit_code == 0 then
 				notify("🟢 Job completed successfully : " .. job.label, vim.log.levels.INFO)
 				quickfix.close()
@@ -435,43 +439,30 @@ local function preview_job_output(output, bufnr, job_id)
 		filtered_output = vim.list_slice(filtered_output, 1, last_non_empty)
 	end
 
-	-- Add padding at the top to center content
-	local win = vim.fn.bufwinid(bufnr)
-	if win ~= -1 then
-		local win_height = vim.api.nvim_win_get_height(win)
-		local content_height = #filtered_output
-		local padding_lines = math.floor((win_height - content_height) / 2)
-		if padding_lines > 0 then
-			for _ = 1, padding_lines do
-				table.insert(filtered_output, 1, "")
-			end
-		end
-	end
-
 	-- Set the lines in the preview buffer
-	vim.bo[bufnr].modifiable = true
-	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, filtered_output)
-	vim.bo[bufnr].modifiable = false
-	vim.bo[bufnr].filetype = "sh"
+	pcall(function()
+		vim.bo[bufnr].modifiable = true
+		vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, filtered_output)
+		vim.bo[bufnr].modifiable = false
+		vim.bo[bufnr].filetype = "sh"
+	end)
 
-	-- Center the content in the preview window
+	-- Scroll to bottom of the preview window
 	vim.schedule(function()
+		if not vim.api.nvim_buf_is_valid(bufnr) then
+			return
+		end
+
 		local preview_win = vim.fn.bufwinid(bufnr)
 		if preview_win ~= -1 then
 			local line_count = vim.api.nvim_buf_line_count(bufnr)
 			if line_count > 0 then
-				-- Set cursor position to start of content (after padding)
-				local win_height = vim.api.nvim_win_get_height(preview_win)
-				local content_start = math.floor((win_height - #filtered_output) / 2) + 1
-
-				-- Ensure cursor position is within valid range
-				content_start = math.max(1, math.min(content_start, line_count))
-
+				-- Set cursor to last line
 				pcall(function()
-					vim.api.nvim_win_set_cursor(preview_win, { content_start, 0 })
-					-- Adjust the window view to center the content
+					vim.api.nvim_win_set_cursor(preview_win, { line_count, 0 })
+					-- Make sure the last few lines are visible
 					vim.api.nvim_win_call(preview_win, function()
-						vim.cmd("normal! zz")
+						vim.cmd("normal! zb")
 					end)
 				end)
 			end
@@ -927,6 +918,56 @@ local function format_jobs_list(jobs_list)
 	return jobs_formatted
 end
 
+local preview_configured = {}
+-- Function to clean up completed jobs and their buffers
+local function cleanup_completed_jobs()
+	local removed_count = 0
+
+	-- Collect jobs to remove (to avoid modifying table while iterating)
+	local jobs_to_remove = {}
+	for job_id, job_info in pairs(background_jobs) do
+		if job_info.completed then
+			-- Find and delete the buffer associated with this job
+			for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_valid(buf_id) then
+					local buf_name = vim.api.nvim_buf_get_name(buf_id)
+					if buf_name:match(vim.pesc(LABEL_PRE .. job_info.label)) then
+						pcall(vim.api.nvim_buf_delete, buf_id, { force = true })
+					end
+				end
+			end
+
+			-- Clean up autocmds if they exist
+			local group_name = string.format("VsTaskPreview_%d", job_id)
+			pcall(vim.api.nvim_del_augroup_by_name, group_name)
+
+			-- Remove from live_output_buffers if present
+			if live_output_buffers[job_id] then
+				if vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
+					pcall(vim.api.nvim_buf_delete, live_output_buffers[job_id], { force = true })
+				end
+				live_output_buffers[job_id] = nil
+			end
+
+			-- Add to removal list
+			table.insert(jobs_to_remove, job_id)
+			removed_count = removed_count + 1
+		end
+	end
+
+	-- Remove the jobs
+	for _, job_id in ipairs(jobs_to_remove) do
+		background_jobs[job_id] = nil
+	end
+
+	-- Notify user of cleanup results
+	if removed_count > 0 then
+		vim.notify(string.format("Cleaned up %d completed job(s)", removed_count), vim.log.levels.INFO)
+	else
+		vim.notify("No completed jobs to clean up", vim.log.levels.INFO)
+	end
+end
+
 local function jobs_picker(opts)
 	opts = opts or {}
 
@@ -956,8 +997,12 @@ local function jobs_picker(opts)
 					local output
 					if is_job_running(job.id) then
 						-- For running jobs, get fresh content from terminal
-						output = get_buffer_content(job.id)
-						preview_job_output(output, self.state.bufnr, job.id)
+						if preview_configured[job.id] == true then
+							output = get_buffer_content(job.id)
+							preview_job_output(output, self.state.bufnr, job.id)
+							return
+						end
+						preview_configured[job.id] = true
 
 						-- Set up live updates for this preview buffer
 						local group_name = string.format("VsTaskPreview_%d", job.id)
@@ -1066,6 +1111,7 @@ local function jobs_picker(opts)
 					local selection = state.get_selected_entry(prompt_bufnr)
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
+					vim.notify("selecting job: " .. job.label)
 					split_to_direction("horizontal")
 					open_buffer(job.label)
 				end
@@ -1095,4 +1141,5 @@ return {
 	Set_mappings = set_mappings,
 	Set_term_opts = set_term_opts,
 	Get_last = get_last,
+	cleanup_completed_jobs = cleanup_completed_jobs,
 }
