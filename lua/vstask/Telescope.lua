@@ -413,8 +413,6 @@ local function preview_job_output(output, bufnr)
 		vim.bo[bufnr].modifiable = true
 		vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, filtered_output)
 		vim.bo[bufnr].modifiable = false
-		-- Set filetype to help with syntax highlighting
-		vim.bo[bufnr].filetype = "sh"
 	end)
 
 	-- Scroll to bottom of the preview window
@@ -1008,6 +1006,7 @@ local function jobs_picker(opts)
 						if type(output) == "string" then
 							output = vim.split(output, "\n")
 						end
+						vim.bo[self.state.bufnr].filetype = "sh"
 						preview_job_output(output, self.state.bufnr)
 					end
 				end,
