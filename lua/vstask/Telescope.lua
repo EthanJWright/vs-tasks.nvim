@@ -21,6 +21,7 @@ local Mappings = {
 local background_jobs = {}
 local live_output_buffers = {} -- Track buffers showing live job output
 local Term_opts = {}
+local preview_configured = {}
 
 local is_job_running = function(job_id)
 	return job_id and background_jobs[job_id].completed ~= true
@@ -189,51 +190,18 @@ local start_job = function(opts)
 		term = true,
 		pty = true,
 		on_stdout = function(_, data)
-			if data and live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
-				vim.schedule(function()
-					if vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
-						-- Copy terminal buffer content to live output buffer
-						local content = get_buffer_content(job_id)
-						pcall(function()
-							vim.bo[live_output_buffers[job_id]].modifiable = true
-							vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, content)
-							vim.bo[live_output_buffers[job_id]].modifiable = false
-						end)
-
-						-- Always scroll to bottom for live updates
-						local win = vim.fn.bufwinid(live_output_buffers[job_id])
-						scroll_to_bottom(win)
-					end
-				end)
-
-				-- Trigger update for preview buffers
+			if data then
+				-- Just trigger the update event, let preview system handle the display
 				vim.schedule(function()
 					vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
 				end)
 			end
 		end,
 		on_stderr = function(_, data)
-			if data and live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
+			if data then
+				-- Just trigger the update event, let preview system handle the display
 				vim.schedule(function()
-					if vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
-						-- Copy terminal buffer content to live output buffer
-						local content = get_buffer_content(job_id)
-						pcall(function()
-							vim.bo[live_output_buffers[job_id]].modifiable = true
-							vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, content)
-							vim.bo[live_output_buffers[job_id]].modifiable = false
-						end)
-
-						-- Scroll to bottom if cursor was at bottom
-						local win = vim.fn.bufwinid(live_output_buffers[job_id])
-						if win ~= -1 then
-							local curr_line = vim.api.nvim_win_get_cursor(win)[1]
-							local line_count = vim.api.nvim_buf_line_count(live_output_buffers[job_id])
-							if curr_line >= line_count - 5 then
-								scroll_to_bottom(win)
-							end
-						end
-					end
+					vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
 				end)
 			end
 		end,
@@ -245,6 +213,7 @@ local start_job = function(opts)
 			end
 
 			vim.schedule(function()
+				-- Just trigger the final update event
 				vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
 			end)
 
@@ -406,7 +375,7 @@ local function toggle_watch(id)
 	background_jobs[id].watch = not background_jobs[id].watch
 end
 
-local function preview_job_output(output, bufnr, job_id)
+local function preview_job_output(output, bufnr)
 	if not vim.api.nvim_buf_is_valid(bufnr) then
 		return
 	end
@@ -439,11 +408,12 @@ local function preview_job_output(output, bufnr, job_id)
 		filtered_output = vim.list_slice(filtered_output, 1, last_non_empty)
 	end
 
-	-- Set the lines in the preview buffer
+	-- Actually update the buffer content
 	pcall(function()
 		vim.bo[bufnr].modifiable = true
 		vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, filtered_output)
 		vim.bo[bufnr].modifiable = false
+		-- Set filetype to help with syntax highlighting
 		vim.bo[bufnr].filetype = "sh"
 	end)
 
@@ -468,43 +438,53 @@ local function preview_job_output(output, bufnr, job_id)
 			end
 		end
 	end)
+end
 
-	-- Set up live updates for preview if job is running
-	if is_job_running(job_id) then
-		local group_name = string.format("VsTaskPreview_%d", job_id)
-		vim.api.nvim_create_augroup(group_name, { clear = true })
+-- Track preview configuration state per buffer+job combination
+local function get_preview_key(bufnr, job_id)
+	return string.format("%d_%d", bufnr, job_id)
+end
 
-		vim.api.nvim_create_autocmd("User", {
-			group = group_name,
-			pattern = "VsTaskJobOutput",
-			callback = function()
-				if vim.api.nvim_buf_is_valid(bufnr) then
-					local content = get_buffer_content(job_id)
-					if content then
-						preview_job_output(content, bufnr, job_id)
-					end
-				end
-			end,
-		})
-
-		-- Store the preview buffer in live_output_buffers
-		live_output_buffers[job_id] = bufnr
+-- Helper function to set up job output preview updates
+local function setup_preview_updates(bufnr, job_id)
+	if not (bufnr and job_id and is_job_running(job_id)) then
+		return
 	end
 
-	-- Set up live updates for preview if job is running
-	if is_job_running(job_id) then
-		-- Remove any existing autocmds for this buffer
-		vim.api.nvim_create_autocmd("User", {
-			pattern = "VsTaskJobOutput",
-			callback = function()
-				if vim.api.nvim_buf_is_valid(bufnr) then
-					-- Get fresh content from terminal buffer
-					local content = get_buffer_content(job_id)
-					preview_job_output(content, bufnr)
-				end
-			end,
-		})
-	end
+	-- Clean up any existing autocmd group first
+	local group_name = string.format("VsTaskPreview_%d", job_id)
+	pcall(vim.api.nvim_del_augroup_by_name, group_name)
+
+	-- Create new augroup and autocmd
+	local group = vim.api.nvim_create_augroup(group_name, { clear = true })
+	vim.api.nvim_create_autocmd("User", {
+		group = group,
+		pattern = "VsTaskJobOutput",
+		callback = function()
+			if not vim.api.nvim_buf_is_valid(bufnr) then
+				pcall(vim.api.nvim_del_augroup_by_name, group_name)
+				live_output_buffers[job_id] = nil
+				return
+			end
+			local content = get_buffer_content(job_id)
+			if content then
+				preview_job_output(content, bufnr)
+			end
+		end,
+	})
+
+	-- Store the preview buffer in live_output_buffers
+	live_output_buffers[job_id] = bufnr
+
+	-- Set up cleanup when buffer is deleted
+	vim.api.nvim_buf_attach(bufnr, false, {
+		on_detach = function()
+			pcall(vim.api.nvim_del_augroup_by_name, group_name)
+			live_output_buffers[job_id] = nil
+			-- Clean up preview configuration state
+			preview_configured[get_preview_key(bufnr, job_id)] = nil
+		end,
+	})
 end
 
 local function inputs_picker(opts)
@@ -918,7 +898,6 @@ local function format_jobs_list(jobs_list)
 	return jobs_formatted
 end
 
-local preview_configured = {}
 -- Function to clean up completed jobs and their buffers
 local function cleanup_completed_jobs()
 	local removed_count = 0
@@ -994,38 +973,38 @@ local function jobs_picker(opts)
 						return
 					end
 
-					local output
 					if is_job_running(job.id) then
-						-- For running jobs, get fresh content from terminal
-						if preview_configured[job.id] == true then
-							output = get_buffer_content(job.id)
-							preview_job_output(output, self.state.bufnr, job.id)
-							return
-						end
-						preview_configured[job.id] = true
-
-						-- Set up live updates for this preview buffer
-						local group_name = string.format("VsTaskPreview_%d", job.id)
-						vim.api.nvim_create_augroup(group_name, { clear = true })
-
-						vim.api.nvim_create_autocmd("User", {
-							group = group_name,
-							pattern = "VsTaskJobOutput",
-							callback = function()
+						-- For running jobs
+						local preview_key = get_preview_key(self.state.bufnr, job.id)
+						if not preview_configured[preview_key] then
+							-- First time seeing this job
+							preview_configured[preview_key] = true
+							-- Set up live updates for this preview buffer
+							setup_preview_updates(self.state.bufnr, job.id)
+							-- Set initial message
+							vim.schedule(function()
 								if vim.api.nvim_buf_is_valid(self.state.bufnr) then
-									local content = get_buffer_content(job.id)
-									if content then
-										preview_job_output(content, self.state.bufnr, job.id)
-									end
+									vim.bo[self.state.bufnr].modifiable = true
+									vim.api.nvim_buf_set_lines(
+										self.state.bufnr,
+										0,
+										-1,
+										false,
+										{ "Starting job, waiting for output..." }
+									)
 								end
-							end,
-						})
-
-						-- Store the preview buffer in live_output_buffers
-						live_output_buffers[job.id] = self.state.bufnr
+							end)
+						else
+							-- Subsequent updates
+							local output = get_buffer_content(job.id)
+							if output and #output > 0 then
+								preview_job_output(output, self.state.bufnr)
+							else
+							end
+						end
 					else
 						-- For completed jobs, use stored output
-						output = job.output or {}
+						local output = job.output or {}
 						if type(output) == "string" then
 							output = vim.split(output, "\n")
 						end
