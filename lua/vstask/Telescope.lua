@@ -394,7 +394,7 @@ local function preview_job_output(output, bufnr)
 	for i, line in ipairs(recent_output) do
 		-- Trim whitespace from both ends
 		line = vim.trim(line)
-		if line ~= "" then
+		if line ~= "" and line ~= nil and not line:match("^%s*$") then
 			filtered_output[#filtered_output + 1] = line
 			last_non_empty = #filtered_output
 		elseif i < #recent_output then
@@ -1002,7 +1002,8 @@ local function jobs_picker(opts)
 						end
 					else
 						-- For completed jobs, use stored output
-						local output = job.output or {}
+						local background_job = background_jobs[job.id]
+						local output = background_job.output or {}
 						if type(output) == "string" then
 							output = vim.split(output, "\n")
 						end
