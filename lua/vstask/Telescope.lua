@@ -22,6 +22,7 @@ local background_jobs = {}
 local live_output_buffers = {} -- Track buffers showing live job output
 local Term_opts = {}
 local preview_configured = {}
+local job_last_selected = {}
 
 local is_job_running = function(job_id)
 	return job_id and background_jobs[job_id].completed ~= true
@@ -866,8 +867,18 @@ local function build_jobs_list()
 		table.insert(jobs_list, job_info)
 	end
 
-	-- Sort all jobs by start_time (most recent first)
+	-- Sort jobs by last selected time, falling back to start time
 	table.sort(jobs_list, function(a, b)
+		-- If both jobs have been selected, sort by last selected time
+		if job_last_selected[a.id] and job_last_selected[b.id] then
+			return job_last_selected[a.id] > job_last_selected[b.id]
+		-- If only one job has been selected, prioritize it
+		elseif job_last_selected[a.id] then
+			return true
+		elseif job_last_selected[b.id] then
+			return false
+		end
+		-- If neither job has been selected, sort by start time
 		return a.start_time > b.start_time
 	end)
 
@@ -1034,6 +1045,9 @@ local function jobs_picker(opts)
 					if background_jobs[job.id] then
 						background_jobs[job.id] = nil
 					end
+					if job_last_selected[job.id] then
+						job_last_selected[job.id] = nil
+					end
 
 					-- Update the picker's job list
 					local current_picker = state.get_current_picker(prompt_bufnr)
@@ -1063,6 +1077,8 @@ local function jobs_picker(opts)
 					local selection = state.get_selected_entry(prompt_bufnr)
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
+					-- Update last selected time
+					job_last_selected[job.id] = os.time()
 					open_buffer(job.label)
 				end
 
@@ -1070,6 +1086,8 @@ local function jobs_picker(opts)
 					local selection = state.get_selected_entry(prompt_bufnr)
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
+					-- Update last selected time
+					job_last_selected[job.id] = os.time()
 					split_to_direction("vertical")
 					open_buffer(job.label)
 				end
@@ -1078,6 +1096,8 @@ local function jobs_picker(opts)
 					local selection = state.get_selected_entry(prompt_bufnr)
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
+					-- Update last selected time
+					job_last_selected[job.id] = os.time()
 					vim.notify("selecting job: " .. job.label)
 					split_to_direction("horizontal")
 					open_buffer(job.label)
