@@ -491,7 +491,7 @@ M.job_selected = function(job_id)
 	job_last_selected[job_id] = os.time()
 end
 
-M.compare_last_selected = function(job_a, job_b)
+local compare_last_selected = function(job_a, job_b)
 	if job_last_selected[job_a] and job_last_selected[job_b] then
 		return job_last_selected[job_a] > job_last_selected[job_b]
 		-- If only one job has been selected, prioritize it
@@ -530,7 +530,7 @@ M.build_jobs_list = function()
 
 	-- Sort jobs by last selected time, falling back to start time
 	table.sort(jobs_list, function(a, b)
-		return M.compare_last_selected(a.id, b.id)
+		return compare_last_selected(a.id, b.id)
 	end)
 
 	return jobs_list

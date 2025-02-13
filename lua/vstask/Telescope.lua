@@ -535,7 +535,7 @@ local function jobs_picker(opts)
 					Job.toggle_watch(job.id)
 				end
 
-				local open_history = function()
+				local open_job = function()
 					local selection = state.get_selected_entry()
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
@@ -567,8 +567,8 @@ local function jobs_picker(opts)
 
 				map("i", Mappings.kill_job, kill_job)
 				map("n", Mappings.kill_job, kill_job)
-				map("i", Mappings.current, open_history)
-				map("n", Mappings.current, open_history)
+				map("i", Mappings.current, open_job)
+				map("n", Mappings.current, open_job)
 				map("i", Mappings.split, open_horizontal)
 				map("n", Mappings.split, open_horizontal)
 				map("i", Mappings.vertical, open_vertical)
