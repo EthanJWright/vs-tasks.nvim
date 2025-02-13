@@ -388,21 +388,6 @@ local function format_job_entry(job_info, is_running)
 	return formatted
 end
 
--- Build a sorted list of jobs
-local function build_jobs_list()
-	local jobs_list = {}
-	for _, job_info in pairs(Job.get_background_jobs()) do
-		table.insert(jobs_list, job_info)
-	end
-
-	-- Sort jobs by last selected time, falling back to start time
-	table.sort(jobs_list, function(a, b)
-		return Job.compare_last_selected(a.id, b.id)
-	end)
-
-	return jobs_list
-end
-
 -- Format the jobs list for display
 local function format_jobs_list(jobs_list)
 	local jobs_formatted = {}
@@ -449,7 +434,7 @@ end
 local function jobs_picker(opts)
 	opts = opts or {}
 
-	local jobs_list = build_jobs_list()
+	local jobs_list = Job.build_jobs_list()
 	local jobs_formatted = format_jobs_list(jobs_list)
 
 	if vim.tbl_isempty(jobs_formatted) then

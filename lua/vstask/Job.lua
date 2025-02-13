@@ -521,6 +521,21 @@ M.configure_preview = function(preview_key, job_id, preview_buffer)
 	end)
 end
 
+-- Build a sorted list of jobs
+M.build_jobs_list = function()
+	local jobs_list = {}
+	for _, job_info in pairs(M.get_background_jobs()) do
+		table.insert(jobs_list, job_info)
+	end
+
+	-- Sort jobs by last selected time, falling back to start time
+	table.sort(jobs_list, function(a, b)
+		return M.compare_last_selected(a.id, b.id)
+	end)
+
+	return jobs_list
+end
+
 M.fully_clear_job = function(job_id)
 	-- Remove from tracking tables
 	if live_output_buffers[job_id] then
