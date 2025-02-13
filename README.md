@@ -67,11 +67,10 @@ Set up keybindings:
 ```vim
 nnoremap <Leader>ta :lua require("telescope").extensions.vstask.tasks()<CR>
 nnoremap <Leader>ti :lua require("telescope").extensions.vstask.inputs()<CR>
-nnoremap <Leader>ti :lua require("telescope").extensions.vstask.clear_inputs()<CR>
+nnoremap <Leader>tc :lua require("telescope").extensions.vstask.clear_inputs()<CR>
 nnoremap <Leader>th :lua require("telescope").extensions.vstask.history()<CR>
 nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
 nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
-nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
 ```
 
 ## Functions
@@ -86,8 +85,8 @@ nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
   - `<C-v>` - Run in vertical split
   - `<C-p>` - Run in horizontal split
   - `<C-t>` - Run in new tab
-  - `<C-b>` - Run as background job
-  - `<C-w>` - Run as watched background job (restarts on file save)
+  - `<C-b>` - Run in background terminal
+  - `<C-w>` - Run as watched job (restarts on file save)
 
 `:Telescope vstask run`
 
@@ -120,27 +119,22 @@ nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
 
 `:Telescope vstask jobs`
 
-- Shows running background tasks
+- Shows all jobs (running and completed)
 - Key mappings:
   - `<CR>` - View output in current window
   - `<C-v>` - View output in vertical split
+  - `<C-p>` - View output in horizontal split
   - `<C-w>` - Toggle watch mode (restart on save)
-  - `<C-d>` - Kill task
+  - `<C-d>` - Kill task/Remove from history
 - Features:
   - Live output preview
   - Watch mode for auto-restart
-  - Task status indicators
-
-`:Telescope vstask jobhistory`
-
-- Shows completed background tasks
-- Key mappings:
-  - `<CR>` - View output in current window
-  - `<C-v>` - View output in vertical split
-- Features:
-  - Exit status indication
-  - Runtime duration
-  - Full output history
+  - Task status indicators (🟠 running, 🟢 success, 🔴 failed)
+  - 👀 Watch indicator for watched tasks
+  - Smart sorting: Recently selected tasks appear first
+  - Runtime duration tracking
+  - Exit code display for completed tasks
+  - Terminal buffer management
 
 ### Utility Functions
 
@@ -333,7 +327,7 @@ lua require("telescope").extensions.vstask.tasks() -- open task list in telescop
 lua require("telescope").extensions.vstask.inputs() -- open the input list, set new input
 lua require("telescope").extensions.vstask.history() -- search history of tasks
 lua require("telescope").extensions.vstask.close() -- close the task runner (if toggleterm)
-lua require("telescope").extensions.vstask.jobs() -- view and manage background tasks (Enter to kill)
+lua require("telescope").extensions.vstask.jobs() -- view and manage all tasks (running and completed)
 lua require("telescope").extensions.vstask.run() -- open menu to type cli cmd and run it with standard bindings
 ```
 
