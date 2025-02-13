@@ -86,6 +86,21 @@ local function get_buf_counter(label)
 	end
 end
 
+local get_unique_label = function(label)
+	local counter = 1
+	for _, job in pairs(M.get_background_jobs()) do
+		if string.find(job.label, label) then
+			counter = counter + 1
+		end
+	end
+	if counter == 1 then
+		return label
+	else
+		local unique_label = label .. " (" .. counter .. ")"
+		return unique_label
+	end
+end
+
 local function name_buffer(buf, label)
 	local name = get_buf_counter(label)
 	vim.api.nvim_buf_set_name(buf, name)
@@ -133,7 +148,7 @@ end
 M.start_job = function(opts)
 	-- Default options
 	local options = {
-		label = opts.label,
+		label = get_unique_label(opts.label),
 		command = opts.command,
 		silent = opts.silent or false,
 		watch = opts.watch or false,
