@@ -73,7 +73,7 @@ local function inputs_picker(opts)
 			sorter = sorters.get_generic_fuzzy_sorter(),
 			attach_mappings = function(prompt_bufnr, map)
 				local start_task = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
+					local selection = state.get_selected_entry()
 					actions.close(prompt_bufnr)
 
 					local input = selection_list[selection.index]["id"]
@@ -90,7 +90,7 @@ local function inputs_picker(opts)
 end
 
 local function handle_direction(direction, prompt_bufnr, selection_list, is_launch, opts)
-	local selection = state.get_selected_entry(prompt_bufnr)
+	local selection = state.get_selected_entry()
 	actions.close(prompt_bufnr)
 
 	local command, options, label, args
@@ -484,7 +484,7 @@ local function jobs_picker(opts)
 			}),
 			attach_mappings = function(prompt_bufnr, map)
 				local kill_job = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
+					local selection = state.get_selected_entry()
 					local job = jobs_list[selection.index]
 					if not job or not job.id then
 						return
@@ -515,7 +515,7 @@ local function jobs_picker(opts)
 					local current_picker = state.get_current_picker(prompt_bufnr)
 
 					-- Rebuild and format jobs list
-					local updated_jobs_list = build_jobs_list()
+					local updated_jobs_list = Job.build_jobs_list()
 					local updated_jobs_formatted = format_jobs_list(updated_jobs_list)
 
 					-- Update the finder with new results
@@ -530,13 +530,13 @@ local function jobs_picker(opts)
 					jobs_list = updated_jobs_list
 				end
 				local toggle_watch_binding = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
+					local selection = state.get_selected_entry()
 					local job = jobs_list[selection.index]
 					Job.toggle_watch(job.id)
 				end
 
 				local open_history = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
+					local selection = state.get_selected_entry()
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
 					-- Update last selected time
@@ -545,7 +545,7 @@ local function jobs_picker(opts)
 				end
 
 				local open_vertical = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
+					local selection = state.get_selected_entry()
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
 					-- Update last selected time
@@ -555,7 +555,7 @@ local function jobs_picker(opts)
 				end
 
 				local open_horizontal = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
+					local selection = state.get_selected_entry()
 					actions.close(prompt_bufnr)
 					local job = jobs_list[selection.index]
 					-- Update last selected time
