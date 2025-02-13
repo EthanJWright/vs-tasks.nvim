@@ -595,29 +595,17 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		return
 	end
 
-	if direction == "background_job" or direction == "watch_job" then
-		cleaned = Parse.replace(cleaned)
-		-- If task has dependencies, run them first
+	local process = function(prepared_command)
 		start_job({
 			label = label,
-			command = cleaned,
+			command = prepared_command,
 			silent = false,
 			watch = direction == "watch_job",
-			terminal = false,
+			terminal = direction ~= "background_job",
+			direction = direction,
 		})
-	else
-		local process = function(prepared_command)
-			start_job({
-				label = label,
-				command = prepared_command,
-				silent = false,
-				watch = false,
-				terminal = true,
-				direction = direction,
-			})
-		end
-		Parse.replace_and_run(cleaned, process, opts)
 	end
+	Parse.replace_and_run(cleaned, process, opts)
 end
 
 local function start_launch_direction(direction, prompt_bufnr, _, selection_list, opts)
