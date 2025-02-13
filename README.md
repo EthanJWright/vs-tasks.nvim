@@ -17,7 +17,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 - ⟳ Run tasks from your history, sorted by most used
 - 🐚 run shell commands with .run() or <C-r>
 - basic support for option picker for task input (similar to extension.commandvariable.pickStringRemember)
-- dependsOn and dependsOrder support, utilizing the background jobs feature. View with JobHistory and Jobs
+- dependsOn and dependsOrder support, utilizing the background jobs feature. View with Jobs picker
 
 ## Example
 
@@ -67,10 +67,10 @@ Set up keybindings:
 ```vim
 nnoremap <Leader>ta :lua require("telescope").extensions.vstask.tasks()<CR>
 nnoremap <Leader>ti :lua require("telescope").extensions.vstask.inputs()<CR>
+nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
 nnoremap <Leader>tc :lua require("telescope").extensions.vstask.clear_inputs()<CR>
 nnoremap <Leader>th :lua require("telescope").extensions.vstask.history()<CR>
 nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
-nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
 ```
 
 ## Functions
@@ -325,9 +325,9 @@ In your project root set up `.vscode/tasks.json` (default config directory set t
 ```lua
 lua require("telescope").extensions.vstask.tasks() -- open task list in telescope
 lua require("telescope").extensions.vstask.inputs() -- open the input list, set new input
+lua require("telescope").extensions.vstask.jobs() -- view and manage all jobs (running and completed)
 lua require("telescope").extensions.vstask.history() -- search history of tasks
 lua require("telescope").extensions.vstask.close() -- close the task runner (if toggleterm)
-lua require("telescope").extensions.vstask.jobs() -- view and manage all tasks (running and completed)
 lua require("telescope").extensions.vstask.run() -- open menu to type cli cmd and run it with standard bindings
 ```
 
@@ -363,11 +363,9 @@ All [variables available in VS Code](https://code.visualstudio.com/docs/editor/v
 At this point only the features I need professionally have been implemented.
 The implemented schema elements are as follows:
 
-- [x] Tasks: Label
-- [x] Tasks: Command
-- [x] Tasks: ID
-- [x] Inputs: Description
-- [x] Inputs: Default
+- [] dependsOn visual layouts
+- [] problemMatcher
+- [] auto run job on opening certain files
 
 As I do not use VS Code, the current implementation are the elements that seem
 most immediately useful. In the future it may be good to look into implementing
