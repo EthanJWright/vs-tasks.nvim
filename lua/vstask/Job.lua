@@ -507,12 +507,24 @@ M.job_selected = function(job_id)
 end
 
 local compare_last_selected = function(job_a, job_b)
-	if job_last_selected[job_a] and job_last_selected[job_b] then
-		return job_last_selected[job_a] > job_last_selected[job_b]
+	local last_a = job_last_selected[job_a]
+	local last_b = job_last_selected[job_b]
+	local background_a = background_jobs[job_a]
+	local background_b = background_jobs[job_b]
+	if last_a and last_b then
+		if background_a.completed and background_b.completed then
+			return last_a > last_b
+		else
+			if background_a.completed then
+				return false
+			elseif background_b.completed then
+				return false
+			end
+		end
 		-- If only one job has been selected, prioritize it
-	elseif job_last_selected[job_a] then
+	elseif last_a then
 		return true
-	elseif job_last_selected[job_b] then
+	elseif last_b then
 		return false
 	end
 	return background_jobs[job_a].start_time > background_jobs[job_b].start_time
@@ -552,6 +564,18 @@ M.build_jobs_list = function()
 end
 
 M.fully_clear_job = function(job_id)
+	-- clear and delete the buffer
+	local job = M.get_background_job(job_id)
+	for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(buf_id) then
+			local buf_name = vim.api.nvim_buf_get_name(buf_id)
+			local to_clear = vim.pesc(M.LABEL_PRE .. job.label)
+			if string.find(buf_name, to_clear) then
+				pcall(vim.api.nvim_buf_delete, buf_id, { force = true })
+			end
+		end
+	end
+
 	-- Remove from tracking tables
 	if live_output_buffers[job_id] then
 		live_output_buffers[job_id] = nil

@@ -420,7 +420,7 @@ local function cleanup_completed_jobs()
 			local group_name = string.format("VsTaskPreview_%d", job_id)
 			pcall(vim.api.nvim_del_augroup_by_name, group_name)
 
-			Job.remove_live_output_buffer(job_id)
+			Job.remove_live_buffer(job_id)
 
 			-- Add to removal list
 			table.insert(jobs_to_remove, job_id)
@@ -485,10 +485,12 @@ local function jobs_picker(opts)
 			attach_mappings = function(prompt_bufnr, map)
 				local kill_job = function()
 					local selection = state.get_selected_entry()
-					local job = jobs_list[selection.index]
-					if not job or not job.id then
+					local selected_job = jobs_list[selection.index]
+					if not selected_job or not selected_job.id then
 						return
 					end
+
+					local job = Job.get_background_job(selected_job.id)
 
 					local is_running = vim.fn.jobwait({ job.id }, 0)[1] == -1
 
@@ -497,16 +499,6 @@ local function jobs_picker(opts)
 						vim.notify(string.format("Killed running job: %s", job.label), vim.log.levels.INFO)
 					else
 						vim.notify(string.format("Removed completed job: %s", job.label), vim.log.levels.INFO)
-					end
-
-					-- Find and delete the buffer associated with this job
-					for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
-						if vim.api.nvim_buf_is_valid(buf_id) then
-							local buf_name = vim.api.nvim_buf_get_name(buf_id)
-							if buf_name:match(vim.pesc(Job.LABEL_PRE .. job.label)) then
-								pcall(vim.api.nvim_buf_delete, buf_id, { force = true })
-							end
-						end
 					end
 
 					Job.fully_clear_job(job.id)
