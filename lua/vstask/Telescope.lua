@@ -398,39 +398,6 @@ local function format_jobs_list(jobs_list)
 	return jobs_formatted
 end
 
--- Function to clean up completed jobs and their buffers
-local function cleanup_completed_jobs()
-	local removed_count = 0
-
-	-- Collect jobs to remove (to avoid modifying table while iterating)
-	local jobs_to_remove = {}
-	for job_id, job_info in pairs(Job.get_background_jobs()) do
-		if job_info.completed then
-			-- Find and delete the buffer associated with this job
-			for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
-				if vim.api.nvim_buf_is_valid(buf_id) then
-					local buf_name = vim.api.nvim_buf_get_name(buf_id)
-					if buf_name:match(vim.pesc(Job.LABEL_PRE .. job_info.label)) then
-						pcall(vim.api.nvim_buf_delete, buf_id, { force = true })
-					end
-				end
-			end
-
-			-- Clean up autocmds if they exist
-			local group_name = string.format("VsTaskPreview_%d", job_id)
-			pcall(vim.api.nvim_del_augroup_by_name, group_name)
-
-			Job.remove_live_buffer(job_id)
-
-			-- Add to removal list
-			table.insert(jobs_to_remove, job_id)
-			removed_count = removed_count + 1
-		end
-	end
-
-	Job.remove_background_jobs(jobs_to_remove)
-end
-
 local function jobs_picker(opts)
 	opts = opts or {}
 
@@ -582,5 +549,4 @@ return {
 	Set_mappings = set_mappings,
 	Set_term_opts = set_term_opts,
 	Get_last = get_last,
-	cleanup_completed_jobs = cleanup_completed_jobs,
 }
