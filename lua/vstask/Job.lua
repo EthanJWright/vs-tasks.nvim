@@ -507,27 +507,28 @@ M.job_selected = function(job_id)
 end
 
 local compare_last_selected = function(job_a, job_b)
-	local last_a = job_last_selected[job_a]
-	local last_b = job_last_selected[job_b]
 	local background_a = background_jobs[job_a]
 	local background_b = background_jobs[job_b]
+
+	-- First prioritize running jobs over completed ones
+	if background_a.completed ~= background_b.completed then
+		return not background_a.completed -- Running jobs (not completed) come first
+	end
+
+	-- If both are running or both are completed, use last selected time
+	local last_a = job_last_selected[job_a]
+	local last_b = job_last_selected[job_b]
+
 	if last_a and last_b then
-		if background_a.completed and background_b.completed then
-			return last_a > last_b
-		else
-			if background_a.completed then
-				return false
-			elseif background_b.completed then
-				return false
-			end
-		end
-		-- If only one job has been selected, prioritize it
+		return last_a > last_b
 	elseif last_a then
 		return true
 	elseif last_b then
 		return false
 	end
-	return background_jobs[job_a].start_time > background_jobs[job_b].start_time
+
+	-- If neither has been selected, sort by start time
+	return background_a.start_time > background_b.start_time
 end
 
 M.is_preview_configured = function(preview_key)
