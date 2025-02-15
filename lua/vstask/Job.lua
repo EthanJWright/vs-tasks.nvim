@@ -557,7 +557,6 @@ M.configure_preview = function(preview_key, job_id, preview_buffer)
 	vim.schedule(function()
 		if vim.api.nvim_buf_is_valid(preview_buffer) then
 			vim.bo[preview_buffer].modifiable = true
-			vim.api.nvim_buf_set_lines(preview_buffer, 0, -1, false, { "Starting job, waiting for output..." })
 		end
 		update_buffers()
 	end)
