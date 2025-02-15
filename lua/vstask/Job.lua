@@ -55,6 +55,13 @@ M.clean_command = function(pre, options)
 	return command
 end
 
+-- Just trigger the update event, let preview system handle the display
+local update_buffers = function()
+	vim.schedule(function()
+		vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
+	end)
+end
+
 -- Helper function to find a task by label
 local function find_task_by_label(label, task_list)
 	for _, task in ipairs(task_list) do
@@ -230,18 +237,12 @@ M.start_job = function(opts)
 		pty = true,
 		on_stdout = function(_, data)
 			if data then
-				-- Just trigger the update event, let preview system handle the display
-				vim.schedule(function()
-					vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
-				end)
+				update_buffers()
 			end
 		end,
 		on_stderr = function(_, data)
 			if data then
-				-- Just trigger the update event, let preview system handle the display
-				vim.schedule(function()
-					vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
-				end)
+				update_buffers()
 			end
 		end,
 		on_exit = function(_, exit_code)
@@ -251,10 +252,7 @@ M.start_job = function(opts)
 				return
 			end
 
-			vim.schedule(function()
-				-- Just trigger the final update event
-				vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
-			end)
+			update_buffers()
 
 			if exit_code == 0 then
 				notify("🟢 Job completed successfully : " .. job.label, vim.log.levels.INFO)
@@ -561,6 +559,7 @@ M.configure_preview = function(preview_key, job_id, preview_buffer)
 			vim.bo[preview_buffer].modifiable = true
 			vim.api.nvim_buf_set_lines(preview_buffer, 0, -1, false, { "Starting job, waiting for output..." })
 		end
+		update_buffers()
 	end)
 end
 
