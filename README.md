@@ -4,10 +4,11 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 
 ## Features
 
-- ⚙ Run commands in a terminal!
+- ⚙ Run commands in a terminal as jobs!
   - split or float the terminal
   - source from ./vscode/tasks.json
   - source from package.json scripts
+- With jobs picker, see all running and completed jobs, including a live output preview
 - 👀 Run any task as a watched job
 - 🧵 Run any task in the background as a job
 - 📖 Browse history of completed background jobs
