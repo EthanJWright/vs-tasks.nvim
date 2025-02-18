@@ -11,5 +11,6 @@ return require("telescope").register_extension({
 		jobs = Telescope.Jobs,
 		clear_inputs = Parse.Clear_inputs,
 		cleanup_completed_jobs = Jobs.cleanup_completed_jobs,
+		command = Telescope.Command,
 	},
 })

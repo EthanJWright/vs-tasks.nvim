@@ -27,6 +27,64 @@ local function get_last()
 	return last_cmd
 end
 
+local function command_input(opts)
+	opts = opts or {}
+
+	-- Create an input dialog
+	local selected_key = nil
+	local input_opts = {
+		prompt = "Enter command: ",
+		callback = function(command)
+			if command and command ~= "" then
+				-- Store the command
+				last_cmd = command
+
+				-- Get the key that was used to submit
+				local key = selected_key or Mappings.current
+				local direction
+				for k, v in pairs(Mappings) do
+					if v == key then
+						direction = k
+						break
+					end
+				end
+
+				Job.start_job({
+					label = "Command: " .. command,
+					command = command,
+					silent = false,
+					watch = direction == "watch_job",
+					terminal = direction ~= "background_job",
+					direction = direction,
+				})
+
+				-- Schedule the mode change to happen after the input is processed
+				vim.schedule(function()
+					vim.cmd("stopinsert")
+				end)
+			end
+		end,
+	}
+
+	-- Create custom mappings for the input buffer
+	local map_opts = { noremap = true, silent = true }
+	local function create_key_handler(key)
+		return function()
+			selected_key = key
+			vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, true, true), "n")
+		end
+	end
+
+	vim.keymap.set("i", Mappings.background_job, create_key_handler(Mappings.background_job), map_opts)
+	vim.keymap.set("i", Mappings.vertical, create_key_handler(Mappings.vertical), map_opts)
+	vim.keymap.set("i", Mappings.split, create_key_handler(Mappings.split), map_opts)
+	vim.keymap.set("i", Mappings.tab, create_key_handler(Mappings.tab), map_opts)
+	vim.keymap.set("i", Mappings.watch_job, create_key_handler(Mappings.watch_job), map_opts)
+
+	-- Show the input dialog
+	vim.ui.input(input_opts, input_opts.callback)
+end
+
 local function set_mappings(new_mappings)
 	for key, value in pairs(new_mappings) do
 		Mappings[key] = value
@@ -549,4 +607,5 @@ return {
 	Set_mappings = set_mappings,
 	Set_term_opts = set_term_opts,
 	Get_last = get_last,
+	Command = command_input,
 }
