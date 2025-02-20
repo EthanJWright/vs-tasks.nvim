@@ -199,7 +199,7 @@ require("vstask").setup({
           label = " npm install",
           type = "shell",
           command = "npm i",
-          filetypes = { "typescript" }, -- leave blank for always adding
+          filetypes = { "typescript" }, -- remove field to always add
         },
       },
 })
