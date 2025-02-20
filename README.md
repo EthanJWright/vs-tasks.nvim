@@ -19,6 +19,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 - 🐚 run shell commands with .run() or <C-r>
 - basic support for option picker for task input (similar to extension.commandvariable.pickStringRemember)
 - dependsOn and dependsOrder support, utilizing the background jobs feature. View with Jobs picker
+- add default tasks in setup for projects without .vscode/tasks.json, or of you want to add your own
 
 ## Example
 
