@@ -616,19 +616,42 @@ M.fully_clear_job = function(job_id)
 end
 
 M.open_buffer = function(label)
-	-- Find the terminal buffer for this job
+	local found_buf = nil
+	-- First try to find an existing buffer
 	for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
 		if vim.api.nvim_buf_is_valid(buf_id) then
 			local buf_name = vim.api.nvim_buf_get_name(buf_id)
 			if buf_name:match(vim.pesc(M.LABEL_PRE .. label)) then
-				vim.api.nvim_win_set_buf(0, buf_id)
-				-- Schedule scrolling to bottom to ensure buffer is loaded
-				vim.schedule(function()
-					M.scroll_to_bottom(vim.api.nvim_get_current_win())
-				end)
-				return
+				found_buf = buf_id
+				break
 			end
 		end
+	end
+
+	-- If no existing buffer found for completed job, create a new one
+	if not found_buf then
+		found_buf = vim.api.nvim_create_buf(true, true)
+		name_buffer(found_buf, label)
+
+		-- If this is a completed job, populate with stored output
+		for _, job in pairs(background_jobs) do
+			if job.label == label and job.completed and job.output then
+				local output = job.output
+				if type(output) == "string" then
+					output = vim.split(output, "\n")
+				end
+				vim.api.nvim_buf_set_lines(found_buf, 0, -1, false, output)
+				break
+			end
+		end
+	end
+
+	if found_buf then
+		vim.api.nvim_win_set_buf(0, found_buf)
+		-- Schedule scrolling to bottom to ensure buffer is loaded
+		vim.schedule(function()
+			M.scroll_to_bottom(vim.api.nvim_get_current_win())
+		end)
 	end
 end
 
