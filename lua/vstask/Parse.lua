@@ -22,6 +22,70 @@ local auto_detect = {
 	npm = "on",
 }
 
+local default_tasks = {}
+
+local function set_default_tasks(tasks)
+	if type(tasks) == "table" then
+		default_tasks = tasks
+		-- Mark these tasks as coming from default configuration
+		for _, task in ipairs(default_tasks) do
+			task.source = "default"
+		end
+	end
+end
+
+-- Get current buffer's filetype
+local function get_current_filetype()
+	return vim.bo.filetype
+end
+
+-- Check if a task matches the current filetype
+-- Check if two tasks are equivalent (same label and type)
+local function tasks_are_equivalent(task1, task2)
+    return task1.label == task2.label and task1.type == task2.type
+end
+
+-- Check if a task already exists in a task list
+local function task_exists(task, task_list)
+    for _, existing_task in ipairs(task_list) do
+        if tasks_are_equivalent(task, existing_task) then
+            return true
+        end
+    end
+    return false
+end
+
+local function task_matches_filetype(task, current_ft)
+	-- If no filetypes specified, task is available for all filetypes
+	if not task.filetypes then
+		return true
+	end
+	
+	-- Handle both string and table formats for filetypes
+	if type(task.filetypes) == "string" then
+		return task.filetypes == current_ft
+	elseif type(task.filetypes) == "table" then
+		for _, ft in ipairs(task.filetypes) do
+			if ft == current_ft then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Filter tasks based on filetype
+local function filter_tasks_by_filetype(tasks)
+	local current_ft = get_current_filetype()
+	local filtered_tasks = {}
+	for _, task in ipairs(tasks) do
+		if task_matches_filetype(task, current_ft) then
+			table.insert(filtered_tasks, task)
+		end
+	end
+	return filtered_tasks
+end
+
 local function should_handle_pick_string(input_config)
   return input_config and input_config.type == "command" and input_config.command == "extension.commandvariable.pickStringRemember"
 end
@@ -280,14 +344,34 @@ local function notify_missing_task_file()
 end
 
 local function get_tasks()
+	local task_list = {}
+
 	if task_cache ~= nil and cache_json_conf then
-		return manage_cache(task_cache, CACHE_STRATEGY)
+		task_list = manage_cache(task_cache, CACHE_STRATEGY)
+
+		-- Check for any new default tasks that should be added based on filetype
+		local current_ft = get_current_filetype()
+		for _, default_task in ipairs(default_tasks) do
+			if task_matches_filetype(default_task, current_ft) and not task_exists(default_task, task_list) then
+				table.insert(task_list, default_task)
+				-- Add to cache as well
+				if not task_cache[default_task.label] then
+					task_cache[default_task.label] = {
+						entry = default_task,
+						hits = 0,
+						timestamp = os.time(),
+						last_used = nil,
+						original_index = #task_list
+					}
+				end
+			end
+		end
+		return task_list
 	end
 
 	local cwd = vim.fn.getcwd()
 	local path = cwd .. "/" .. config_dir .. "/tasks.json"
 
-	local task_list = {}
 
 	get_inputs()
 
@@ -311,6 +395,15 @@ local function get_tasks()
 		task.source = "npm"  -- Mark tasks from npm
 		table.insert(task_list, task)
 	end
+
+	-- add default tasks to Tasks
+	for _, task in ipairs(default_tasks) do
+		table.insert(task_list, task)
+	end
+
+	-- Filter tasks by filetype
+	task_list = filter_tasks_by_filetype(task_list)
+
 	-- add each task to cached while initializing 'hits' as 0
 	task_cache = create_cache(task_list, "label")
 
@@ -558,7 +651,8 @@ return {
 	Set_cache_json_conf = set_cache_json_conf,
 	Set_config_dir = set_config_dir,
 	Set_json_parser = set_json_parser,
-  Clear_inputs = clear_inputs,
-  Set_buffer_options = set_buffer_options,
-  buffer_options = buffer_options,
+	Clear_inputs = clear_inputs,
+	Set_buffer_options = set_buffer_options,
+	Set_default_tasks = set_default_tasks,
+	buffer_options = buffer_options,
 }

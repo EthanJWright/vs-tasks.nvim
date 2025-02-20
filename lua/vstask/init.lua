@@ -33,6 +33,9 @@ local function config(opts)
 	if opts.buffer_options ~= nil then
 		M.Parse.Set_buffer_options(opts.buffer_options)
 	end
+	if opts.default_tasks ~= nil then
+		M.Parse.Set_default_tasks(opts.default_tasks)
+	end
 end
 
 M.config = function(opts)
