@@ -359,9 +359,7 @@ local function restart_watched_jobs()
 			vim.fn.jobstop(job_id)
 
 			-- Use timer to ensure job is fully stopped before restarting
-			local job_status = vim.fn.jobwait({ job_id }, -1)[1]
-			local is_running = job_status == -1
-			if not is_running then
+			if not Job.is_running(job_id) then
 				-- Remove from background_jobs to prevent duplicate entries
 				Job.set_background_jobs(job_id, nil)
 
@@ -516,15 +514,6 @@ local function jobs_picker(opts)
 					end
 
 					local job = Job.get_background_job(selected_job.id)
-
-					local is_running = vim.fn.jobwait({ job.id }, 0)[1] == -1
-
-					if is_running then
-						vim.fn.jobstop(job.id)
-						vim.notify(string.format("Killed running job: %s", job.label), vim.log.levels.INFO)
-					else
-						vim.notify(string.format("Removed completed job: %s", job.label), vim.log.levels.INFO)
-					end
 
 					Job.fully_clear_job(job.id)
 

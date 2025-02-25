@@ -12,6 +12,16 @@ local Term_opts = {}
 
 M.LABEL_PRE = "Task: "
 
+M.is_running = function(job_id)
+	local job_status = vim.fn.jobwait({ job_id }, -1)[1]
+	local is_running = job_status == -1
+	return is_running
+end
+
+M.remove_live_output_buffer = function(job_id)
+	live_output_buffers[job_id] = nil
+end
+
 M.split_to_direction = function(direction)
 	local opt_direction = Opts.get_direction(direction, Term_opts)
 	local size = Opts.get_size(direction, Term_opts)
@@ -437,6 +447,31 @@ M.preview_job_output = function(output, bufnr)
 	end)
 end
 
+M.remove_preview = function(job_id)
+	-- Clean up any existing autocmd group
+	local group_name = string.format("VsTaskPreview_%d", job_id)
+	pcall(vim.api.nvim_del_augroup_by_name, group_name)
+
+	-- Get the preview buffer if it exists
+	local preview_buf = live_output_buffers[job_id]
+	if preview_buf then
+		-- Remove from live_output_buffers
+		live_output_buffers[job_id] = nil
+
+		-- Clean up preview configuration state for all combinations with this job_id
+		for key in pairs(preview_configured) do
+			if key:match("_" .. job_id .. "$") then
+				preview_configured[key] = nil
+			end
+		end
+
+		-- If the buffer is still valid, clean it up
+		if vim.api.nvim_buf_is_valid(preview_buf) then
+			pcall(vim.api.nvim_buf_delete, preview_buf, { force = true })
+		end
+	end
+end
+
 -- Track preview configuration state per buffer+job combination
 M.get_preview_key = function(bufnr, job_id)
 	return string.format("%d_%d", bufnr, job_id)
@@ -506,15 +541,6 @@ M.remove_background_jobs = function(jobs_to_remove)
 	end
 end
 
-M.remove_live_buffer = function(job_id)
-	-- Remove from live_output_buffers if present
-	if live_output_buffers[job_id] then
-		if vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
-			pcall(vim.api.nvim_buf_delete, live_output_buffers[job_id], { force = true })
-		end
-		live_output_buffers[job_id] = nil
-	end
-end
 M.job_selected = function(job_id)
 	job_last_selected[job_id] = os.time()
 end
@@ -584,18 +610,31 @@ M.fully_clear_job = function(job_id)
 		return
 	end
 
-	-- Find and delete all related buffers
+	if M.is_running(job.id) then
+		vim.fn.jobstop(job.id)
+		vim.notify(string.format("Killed running job: %s", job.label), vim.log.levels.INFO)
+	end
+
+	M.remove_preview(job_id)
+
+	-- Track which buffers we're going to delete
+	local buffers_to_delete = {}
+
+	-- Find all related buffers
 	for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
 		if vim.api.nvim_buf_is_valid(buf_id) then
 			local buf_name = vim.api.nvim_buf_get_name(buf_id)
-			-- Exact match for the buffer name including any counter suffix
-			if buf_name == M.LABEL_PRE .. job.label then
-				-- Force delete the buffer and unload it
-				pcall(vim.api.nvim_buf_delete, buf_id, { force = true })
-				pcall(vim.api.nvim_command, "bwipeout! " .. buf_id)
-				break -- Only delete the exact matching buffer
+			-- Match for the buffer name including any counter suffix
+			if buf_name:match(vim.pesc(M.LABEL_PRE .. job.label)) then
+				table.insert(buffers_to_delete, buf_id)
 			end
 		end
+	end
+
+	-- Delete all identified buffers
+	for _, buf_id in ipairs(buffers_to_delete) do
+		pcall(vim.api.nvim_buf_delete, buf_id, { force = true })
+		pcall(vim.api.nvim_command, "bwipeout! " .. buf_id)
 	end
 
 	-- Remove from tracking tables
@@ -610,8 +649,28 @@ M.fully_clear_job = function(job_id)
 	end
 
 	-- Force a garbage collection to ensure everything is cleaned up
+	collectgarbage("collect")
+
+	-- Schedule a check to verify buffers are gone
 	vim.schedule(function()
-		collectgarbage("collect")
+		local remaining_buffers = {}
+		local job_label_pattern = vim.pesc(M.LABEL_PRE .. job.label)
+
+		for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+			if vim.api.nvim_buf_is_valid(buf_id) then
+				local buf_name = vim.api.nvim_buf_get_name(buf_id)
+				if buf_name:match(job_label_pattern) then
+					table.insert(remaining_buffers, buf_name)
+				end
+			end
+		end
+
+		if #remaining_buffers > 0 then
+			vim.notify(
+				"Warning: Some job buffers could not be removed: " .. table.concat(remaining_buffers, ", "),
+				vim.log.levels.WARN
+			)
+		end
 	end)
 end
 
@@ -657,43 +716,12 @@ end
 
 -- Function to clean up completed jobs and their buffers
 M.cleanup_completed_jobs = function()
-	local removed_count = 0
-
-	-- Collect jobs to remove (to avoid modifying table while iterating)
-	local jobs_to_remove = {}
-	for job_id, job_info in pairs(M.get_background_jobs()) do
-		-- Check if job is actually completed by checking both the completed flag
-		-- and verifying it's not still running
-		local is_running = vim.fn.jobwait({ job_id }, 0)[1] == -1
-		if job_info.completed and not is_running then
-			-- Find and delete the buffer associated with this job
-			for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
-				if vim.api.nvim_buf_is_valid(buf_id) then
-					local buf_name = vim.api.nvim_buf_get_name(buf_id)
-					-- Use exact match for the buffer name
-					if buf_name == M.LABEL_PRE .. job_info.label then
-						pcall(vim.api.nvim_buf_delete, buf_id, { force = true })
-						break -- Only delete the exact matching buffer
-					end
-				end
-			end
-
-			-- Clean up autocmds if they exist
-			local group_name = string.format("VsTaskPreview_%d", job_id)
-			pcall(vim.api.nvim_del_augroup_by_name, group_name)
-
-			M.remove_live_buffer(job_id)
-
-			-- Add to removal list
-			table.insert(jobs_to_remove, job_id)
-			removed_count = removed_count + 1
+	for _, job in pairs(M.get_background_jobs()) do
+		if job.completed then
+			M.fully_clear_job(job.id)
 		end
 	end
-
-	if #jobs_to_remove > 0 then
-		M.remove_background_jobs(jobs_to_remove)
-		vim.notify(string.format("Cleaned up %d completed jobs", removed_count), vim.log.levels.INFO)
-	end
+	vim.notify("Cleared all completed background jobs.")
 end
 
 return M
