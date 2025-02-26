@@ -426,6 +426,9 @@ local function restart_watched_jobs()
 						silent = false,
 						watch = true,
 						terminal = false, -- Start in background
+						on_complete = function()
+							refresh_picker()
+						end,
 					})
 				end)
 			else

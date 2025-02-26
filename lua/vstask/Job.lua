@@ -362,6 +362,7 @@ M.run_dependent_tasks = function(task, task_list)
 			silent = false,
 			watch = false,
 			on_complete = run_next_task,
+			terminal = false,
 		})
 	end
 
@@ -373,6 +374,7 @@ M.run_dependent_tasks = function(task, task_list)
 				command = parallel_task.command,
 				silent = false,
 				watch = false,
+				terminal = false,
 			})
 		end
 	end
