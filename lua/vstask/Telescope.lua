@@ -18,9 +18,58 @@ local Mappings = {
 }
 
 local last_cmd = nil
-
+Picker = nil
 local function set_term_opts(new_opts)
 	Term_opts = new_opts
+end
+
+local function format_job_entry(job_info, is_running)
+	local runtime
+	if is_running then
+		runtime = os.time() - job_info.start_time
+	else
+		runtime = (job_info.end_time or os.time()) - job_info.start_time
+	end
+
+	local formatted = string.format("%s - (runtime %ds)", job_info.label, runtime)
+	if job_info.watch then
+		formatted = "👀 " .. formatted
+	end
+
+	if is_running then
+		formatted = "🟠 " .. formatted
+	else
+		if job_info.exit_code == 0 then
+			formatted = "🟢 " .. formatted
+		else
+			formatted = string.format("🔴 [exit code - (%d)] ", job_info.exit_code) .. formatted
+		end
+	end
+
+	return formatted
+end
+
+-- Format the jobs list for display
+local function format_jobs_list(jobs_list)
+	local jobs_formatted = {}
+	for _, job_info in ipairs(jobs_list) do
+		local is_running = not job_info.completed and vim.fn.jobwait({ job_info.id }, 0)[1] == -1
+		table.insert(jobs_formatted, format_job_entry(job_info, is_running))
+	end
+	return jobs_formatted
+end
+
+local refresh_picker = function()
+	local jobs_list = Job.build_jobs_list()
+	local jobs_formatted = format_jobs_list(jobs_list)
+	if Picker then
+		Picker:refresh(
+			finders.new_table({
+				results = jobs_formatted,
+			}),
+			{ reset_prompt = false }
+		)
+	end
 end
 
 local function get_last()
@@ -209,6 +258,9 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 			watch = direction == "watch_job",
 			terminal = direction ~= "background_job",
 			direction = direction,
+			on_complete = function()
+				refresh_picker()
+			end,
 		})
 	end
 	Parse.replace_and_run(cleaned, process, opts)
@@ -418,42 +470,6 @@ function Add_watch_autocmd()
 	end
 end
 
-local function format_job_entry(job_info, is_running)
-	local runtime
-	if is_running then
-		runtime = os.time() - job_info.start_time
-	else
-		runtime = (job_info.end_time or os.time()) - job_info.start_time
-	end
-
-	local formatted = string.format("%s - (runtime %ds)", job_info.label, runtime)
-	if job_info.watch then
-		formatted = "👀 " .. formatted
-	end
-
-	if is_running then
-		formatted = "🟠 " .. formatted
-	else
-		if job_info.exit_code == 0 then
-			formatted = "🟢 " .. formatted
-		else
-			formatted = string.format("🔴 [exit code - (%d)] ", job_info.exit_code) .. formatted
-		end
-	end
-
-	return formatted
-end
-
--- Format the jobs list for display
-local function format_jobs_list(jobs_list)
-	local jobs_formatted = {}
-	for _, job_info in ipairs(jobs_list) do
-		local is_running = not job_info.completed and vim.fn.jobwait({ job_info.id }, 0)[1] == -1
-		table.insert(jobs_formatted, format_job_entry(job_info, is_running))
-	end
-	return jobs_formatted
-end
-
 local function jobs_picker(opts)
 	opts = opts or {}
 
@@ -465,127 +481,128 @@ local function jobs_picker(opts)
 		return
 	end
 
-	pickers
-		.new(opts, {
-			prompt_title = "Jobs",
-			finder = finders.new_table({
-				results = jobs_formatted,
-			}),
-			sorter = sorters.get_generic_fuzzy_sorter(),
-			previewer = previewers.new_buffer_previewer({
-				title = "Jobs",
-				define_preview = function(self, entry)
-					local job = jobs_list[entry.index]
-					if not job then
-						return
-					end
+	Picker = pickers.new(opts, {
+		prompt_title = "Jobs",
+		finder = finders.new_table({
+			results = jobs_formatted,
+		}),
+		sorter = sorters.get_generic_fuzzy_sorter(),
+		previewer = previewers.new_buffer_previewer({
+			title = "Jobs",
+			define_preview = function(self, entry)
+				local job = jobs_list[entry.index]
+				if not job then
+					return
+				end
 
-					if Job.is_job_running(job.id) then
-						-- For running jobs
-						local preview_key = Job.get_preview_key(self.state.bufnr, job.id)
-						if not Job.is_preview_configured(preview_key) then
-							Job.configure_preview(preview_key, job.id, self.state.bufnr)
-						else
-							-- Subsequent updates
-							local output = Job.get_buffer_content(job.id)
-							if output and #output > 0 then
-								Job.preview_job_output(output, self.state.bufnr)
-							else
-							end
-						end
+				if Job.is_job_running(job.id) then
+					-- For running jobs
+					local preview_key = Job.get_preview_key(self.state.bufnr, job.id)
+					if not Job.is_preview_configured(preview_key) then
+						Job.configure_preview(preview_key, job.id, self.state.bufnr)
 					else
-						-- For completed jobs, use stored output
-						local background_job = Job.get_background_job(job.id)
-						local output = background_job.output or {}
-						if type(output) == "string" then
-							output = vim.split(output, "\n")
+						-- Subsequent updates
+						local output = Job.get_buffer_content(job.id)
+						if output and #output > 0 then
+							Job.preview_job_output(output, self.state.bufnr)
+						else
 						end
-						vim.bo[self.state.bufnr].filetype = "sh"
-						Job.preview_job_output(output, self.state.bufnr)
 					end
-				end,
-			}),
-			attach_mappings = function(prompt_bufnr, map)
-				local kill_job = function()
-					local selection = state.get_selected_entry()
-					local selected_job = jobs_list[selection.index]
-					if not selected_job or not selected_job.id then
-						return
+				else
+					-- For completed jobs, use stored output
+					local background_job = Job.get_background_job(job.id)
+					local output = background_job.output or {}
+					if type(output) == "string" then
+						output = vim.split(output, "\n")
 					end
-
-					local job = Job.get_background_job(selected_job.id)
-
-					Job.fully_clear_job(job.id)
-
-					-- Update the picker's job list
-					local current_picker = state.get_current_picker(prompt_bufnr)
-
-					-- Rebuild and format jobs list
-					local updated_jobs_list = Job.build_jobs_list()
-					local updated_jobs_formatted = format_jobs_list(updated_jobs_list)
-
-					-- Update the finder with new results
-					current_picker:refresh(
-						finders.new_table({
-							results = updated_jobs_formatted,
-						}),
-						{ reset_prompt = false }
-					)
-
-					-- Update the reference to jobs_list for the picker
-					jobs_list = updated_jobs_list
+					vim.bo[self.state.bufnr].filetype = "sh"
+					Job.preview_job_output(output, self.state.bufnr)
 				end
-				local toggle_watch_binding = function()
-					local selection = state.get_selected_entry()
-					local job = jobs_list[selection.index]
-					Job.toggle_watch(job.id)
-				end
-
-				local open_job = function()
-					local selection = state.get_selected_entry()
-					actions.close(prompt_bufnr)
-					local job = jobs_list[selection.index]
-					-- Update last selected time
-					Job.job_selected(job.id)
-					Job.open_buffer(job.label)
-				end
-
-				local open_vertical = function()
-					local selection = state.get_selected_entry()
-					actions.close(prompt_bufnr)
-					local job = jobs_list[selection.index]
-					-- Update last selected time
-					Job.job_selected(job.id)
-					Job.split_to_direction("vertical")
-					Job.open_buffer(job.label)
-				end
-
-				local open_horizontal = function()
-					local selection = state.get_selected_entry()
-					actions.close(prompt_bufnr)
-					local job = jobs_list[selection.index]
-					-- Update last selected time
-					Job.job_selected(job.id)
-					vim.notify("selecting job: " .. job.label)
-					Job.split_to_direction("horizontal")
-					Job.open_buffer(job.label)
-				end
-
-				map("i", Mappings.kill_job, kill_job)
-				map("n", Mappings.kill_job, kill_job)
-				map("i", Mappings.current, open_job)
-				map("n", Mappings.current, open_job)
-				map("i", Mappings.split, open_horizontal)
-				map("n", Mappings.split, open_horizontal)
-				map("i", Mappings.vertical, open_vertical)
-				map("n", Mappings.vertical, open_vertical)
-				map("i", Mappings.watch_job, toggle_watch_binding)
-				map("n", Mappings.watch_job, toggle_watch_binding)
-
-				return true
 			end,
-		})
-		:find()
+		}),
+		attach_mappings = function(prompt_bufnr, map)
+			local kill_job = function()
+				local selection = state.get_selected_entry()
+				local selected_job = jobs_list[selection.index]
+				if not selected_job or not selected_job.id then
+					return
+				end
+
+				local job = Job.get_background_job(selected_job.id)
+
+				Job.fully_clear_job(job.id)
+
+				-- Update the picker's job list
+				local current_picker = state.get_current_picker(prompt_bufnr)
+
+				-- Rebuild and format jobs list
+				local updated_jobs_list = Job.build_jobs_list()
+				local updated_jobs_formatted = format_jobs_list(updated_jobs_list)
+
+				-- Update the finder with new results
+				current_picker:refresh(
+					finders.new_table({
+						results = updated_jobs_formatted,
+					}),
+					{ reset_prompt = false }
+				)
+
+				-- Update the reference to jobs_list for the picker
+				jobs_list = updated_jobs_list
+			end
+			local toggle_watch_binding = function()
+				local selection = state.get_selected_entry()
+				local job = jobs_list[selection.index]
+				Job.toggle_watch(job.id)
+			end
+
+			local open_job = function()
+				local selection = state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				local job = jobs_list[selection.index]
+				-- Update last selected time
+				Job.job_selected(job.id)
+				Job.open_buffer(job.label)
+			end
+
+			local open_vertical = function()
+				local selection = state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				local job = jobs_list[selection.index]
+				-- Update last selected time
+				Job.job_selected(job.id)
+				Job.split_to_direction("vertical")
+				Job.open_buffer(job.label)
+			end
+
+			local open_horizontal = function()
+				local selection = state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				local job = jobs_list[selection.index]
+				-- Update last selected time
+				Job.job_selected(job.id)
+				vim.notify("selecting job: " .. job.label)
+				Job.split_to_direction("horizontal")
+				Job.open_buffer(job.label)
+			end
+
+			map("i", Mappings.kill_job, kill_job)
+			map("n", Mappings.kill_job, kill_job)
+			map("i", Mappings.current, open_job)
+			map("n", Mappings.current, open_job)
+			map("i", Mappings.split, open_horizontal)
+			map("n", Mappings.split, open_horizontal)
+			map("i", Mappings.vertical, open_vertical)
+			map("n", Mappings.vertical, open_vertical)
+			map("i", Mappings.watch_job, toggle_watch_binding)
+			map("n", Mappings.watch_job, toggle_watch_binding)
+
+			return true
+		end,
+	})
+	if Picker then
+		Picker:find()
+	end
 end
 
 return {

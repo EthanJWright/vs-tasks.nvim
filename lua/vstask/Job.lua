@@ -185,6 +185,7 @@ M.start_job = function(opts)
 		silent = opts.silent or false,
 		watch = opts.watch or false,
 		on_complete = opts.on_complete,
+		on_data = opts.on_data,
 		terminal = opts.terminal == nil and true or opts.terminal,
 		direction = opts.direction or "current",
 	}
@@ -247,6 +248,9 @@ M.start_job = function(opts)
 		pty = true,
 		on_stdout = function(_, data)
 			if data then
+				if options.on_data then
+					options.on_data(data)
+				end
 				update_buffers()
 			end
 		end,
