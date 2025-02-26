@@ -105,6 +105,9 @@ local function command_input(opts)
 					watch = direction == "watch_job",
 					terminal = direction ~= "background_job",
 					direction = direction,
+					on_complete = function()
+						refresh_picker()
+					end,
 				})
 
 				-- Schedule the mode change to happen after the input is processed
@@ -533,25 +536,8 @@ local function jobs_picker(opts)
 
 				local job = Job.get_background_job(selected_job.id)
 
-				Job.fully_clear_job(job.id)
-
-				-- Update the picker's job list
-				local current_picker = state.get_current_picker(prompt_bufnr)
-
-				-- Rebuild and format jobs list
-				local updated_jobs_list = Job.build_jobs_list()
-				local updated_jobs_formatted = format_jobs_list(updated_jobs_list)
-
-				-- Update the finder with new results
-				current_picker:refresh(
-					finders.new_table({
-						results = updated_jobs_formatted,
-					}),
-					{ reset_prompt = false }
-				)
-
-				-- Update the reference to jobs_list for the picker
-				jobs_list = updated_jobs_list
+				Job.fully_clear_job(job)
+				refresh_picker()
 			end
 			local toggle_watch_binding = function()
 				local selection = state.get_selected_entry()
@@ -584,7 +570,6 @@ local function jobs_picker(opts)
 				local job = jobs_list[selection.index]
 				-- Update last selected time
 				Job.job_selected(job.id)
-				vim.notify("selecting job: " .. job.label)
 				Job.split_to_direction("horizontal")
 				Job.open_buffer(job.label)
 			end

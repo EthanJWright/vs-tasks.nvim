@@ -13,7 +13,7 @@ local Term_opts = {}
 M.LABEL_PRE = "Task: "
 
 M.is_running = function(job_id)
-	local job_status = vim.fn.jobwait({ job_id }, -1)[1]
+	local job_status = vim.fn.jobwait({ job_id }, 0)[1]
 	local is_running = job_status == -1
 	return is_running
 end
@@ -257,6 +257,9 @@ M.start_job = function(opts)
 		on_stderr = function(_, data)
 			if data then
 				update_buffers()
+			end
+			if options.on_complete ~= nil then
+				options.on_complete()
 			end
 		end,
 		on_exit = function(_, exit_code)
@@ -609,19 +612,24 @@ M.build_jobs_list = function()
 	return jobs_list
 end
 
-M.fully_clear_job = function(job_id)
+M.fully_clear_job = function(job)
 	-- clear and delete the buffer
-	local job = M.get_background_job(job_id)
 	if not job then
 		return
 	end
 
 	if M.is_running(job.id) then
-		vim.fn.jobstop(job.id)
-		vim.notify(string.format("Killed running job: %s", job.label), vim.log.levels.INFO)
+		local status = vim.fn.jobstop(job.id)
+		local success = status == 1
+
+		if success then
+			vim.notify(string.format("Killed running job: %s", job.label), vim.log.levels.INFO)
+		else
+			vim.notify(string.format("Failed to kill job: %s", job.label), vim.log.levels.WARN)
+		end
 	end
 
-	M.remove_preview(job_id)
+	M.remove_preview(job.id)
 
 	-- Track which buffers we're going to delete
 	local buffers_to_delete = {}
@@ -644,14 +652,14 @@ M.fully_clear_job = function(job_id)
 	end
 
 	-- Remove from tracking tables
-	if live_output_buffers[job_id] then
-		live_output_buffers[job_id] = nil
+	if live_output_buffers[job.id] then
+		live_output_buffers[job.id] = nil
 	end
-	if background_jobs[job_id] then
-		background_jobs[job_id] = nil
+	if background_jobs[job.id] then
+		background_jobs[job.id] = nil
 	end
-	if job_last_selected[job_id] then
-		job_last_selected[job_id] = nil
+	if job_last_selected[job.id] then
+		job_last_selected[job.id] = nil
 	end
 
 	-- Force a garbage collection to ensure everything is cleaned up
@@ -724,7 +732,7 @@ end
 M.cleanup_completed_jobs = function()
 	for _, job in pairs(M.get_background_jobs()) do
 		if job.completed then
-			M.fully_clear_job(job.id)
+			M.fully_clear_job(job)
 		end
 	end
 	vim.notify("Cleared all completed background jobs.")
