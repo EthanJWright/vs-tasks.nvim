@@ -1,8 +1,10 @@
 local Parse = require("vstask.Parse")
 local Telescope = require("vstask.Telescope")
 local Jobs = require("vstask.Job")
+local telescope = require("telescope")
 
-return require("telescope").register_extension({
+local M = telescope.register_extension({
+	setup = require("vstask").setup,
 	exports = {
 		tasks = Telescope.Tasks,
 		inputs = Telescope.Inputs,
@@ -14,3 +16,5 @@ return require("telescope").register_extension({
 		command = Telescope.Command,
 	},
 })
+
+return M
