@@ -1,4 +1,3 @@
----@alias openmode
 ---|>"r"   # Read mode.
 ---| "w"   # Write mode.
 ---| "a"   # Append mode.
@@ -22,7 +21,7 @@ local readfile = function(filePath, mode)
 	local file = io.open(filePath, "r")
 	if file then
 		local data = file:read("*a")
-		file.close()
+		file.close(file)
 		return data
 	end
 end

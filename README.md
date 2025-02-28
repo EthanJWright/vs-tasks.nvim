@@ -4,10 +4,11 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 
 ## Features
 
-- ⚙ Run commands in a terminal!
+- ⚙ Run commands in a terminal as jobs!
   - split or float the terminal
   - source from ./vscode/tasks.json
   - source from package.json scripts
+- With jobs picker, see all running and completed jobs, including a live output preview
 - 👀 Run any task as a watched job
 - 🧵 Run any task in the background as a job
 - 📖 Browse history of completed background jobs
@@ -15,9 +16,10 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 - Use VS Code's [variables](https://code.visualstudio.com/docs/editor/variables-reference) in the command (limited support, see desired features)
 - Use VS Code's [launch.json](https://code.visualstudio.com/docs/editor/debugging#_launch-configurations) pattern (limited support)
 - ⟳ Run tasks from your history, sorted by most used
-- 🐚 run shell commands with .run() or <C-r>
+- 🐚 run shell commands with .run() or `<C-r>`
 - basic support for option picker for task input (similar to extension.commandvariable.pickStringRemember)
-- dependsOn and dependsOrder support, utilizing the background jobs feature. View with JobHistory and Jobs
+- dependsOn and dependsOrder support, utilizing the background jobs feature. View with Jobs picker
+- add default tasks in setup for projects without .vscode/tasks.json, or of you want to add your own
 
 ## Example
 
@@ -67,11 +69,11 @@ Set up keybindings:
 ```vim
 nnoremap <Leader>ta :lua require("telescope").extensions.vstask.tasks()<CR>
 nnoremap <Leader>ti :lua require("telescope").extensions.vstask.inputs()<CR>
-nnoremap <Leader>ti :lua require("telescope").extensions.vstask.clear_inputs()<CR>
-nnoremap <Leader>th :lua require("telescope").extensions.vstask.history()<CR>
-nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
 nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
-nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
+nnoremap <Leader>td :lua require("telescope").extensions.vstask.clear_inputs()<CR>
+nnoremap <Leader>tc :lua require("telescope").extensions.vstask.cleanup_completed_jobs()<CR>
+nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
+nnoremap <Leader>tl :lua require('telescope').extensions.vstask.command()<cr>
 ```
 
 ## Functions
@@ -80,14 +82,15 @@ nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
 
 `:Telescope vstask tasks`
 
-- Opens task picker showing all available tasks from `.vscode/tasks.json` and `package.json` scripts
+- Opens task picker showing all available tasks from `.vscode/tasks.json`
+- Also can load language specific of `default_tasks` based on config
 - Key mappings:
   - `<CR>` - Run in current window
   - `<C-v>` - Run in vertical split
   - `<C-p>` - Run in horizontal split
   - `<C-t>` - Run in new tab
-  - `<C-b>` - Run as background job
-  - `<C-w>` - Run as watched background job (restarts on file save)
+  - `<C-b>` - Run in background terminal
+  - `<C-w>` - Run as watched job (restarts on file save)
 
 `:Telescope vstask run`
 
@@ -102,11 +105,6 @@ nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
   - promptString (text input)
   - pickString (selection from list)
 
-`:Telescope vstask history`
-
-- Shows previously run tasks, sorted by usage frequency
-- Supports same key mappings as tasks
-
 `:Telescope vstask launch`
 
 - Opens launch configuration picker from `.vscode/launch.json`
@@ -115,38 +113,38 @@ nnoremap <Leader>t; :lua require("telescope").extensions.vstask.jobhistory()<CR>
   - `<C-v>` - Run in vertical split
   - `<C-p>` - Run in horizontal split
   - `<C-t>` - Run in new tab
+  - `<C-b>` - Run in background terminal (hidden from buffers)
 
 ### Job Management
 
 `:Telescope vstask jobs`
 
-- Shows running background tasks
+- Shows all jobs (running and completed)
 - Key mappings:
   - `<CR>` - View output in current window
   - `<C-v>` - View output in vertical split
+  - `<C-p>` - View output in horizontal split
   - `<C-w>` - Toggle watch mode (restart on save)
-  - `<C-d>` - Kill task
+  - `<C-d>` - Kill task and remove from job list
 - Features:
   - Live output preview
   - Watch mode for auto-restart
-  - Task status indicators
-
-`:Telescope vstask jobhistory`
-
-- Shows completed background tasks
-- Key mappings:
-  - `<CR>` - View output in current window
-  - `<C-v>` - View output in vertical split
-- Features:
-  - Exit status indication
-  - Runtime duration
-  - Full output history
+  - Task status indicators (🟠 running, 🟢 success, 🔴 failed)
+  - 👀 Watch indicator for watched tasks
+  - Smart sorting: Recently selected tasks appear first
+  - Runtime duration tracking
+  - Exit code display for completed tasks
+  - Terminal buffer management
 
 ### Utility Functions
 
 `:Telescope vstask clear_inputs`
 
 - Clears all stored input variable values for current session
+
+`:Telescope vstask cleanup_completed_jobs`
+
+- Removes all completed jobs from the job list
 
 ### Autodetect
 
@@ -160,6 +158,12 @@ scripts.
 - Cache json conf sets whether the config will be ran every time. If the cache
   is removed, this will also remove cache features such as remembering last
   ran command
+
+Make sure to load the plugin in your telescope config
+
+```lua
+require("telescope").load_extension("vstask")
+```
 
 ```lua
 lua <<EOF
@@ -198,6 +202,14 @@ require("vstask").setup({
     }
   },
   json_parser = vim.json.decode,
+  default_tasks = {
+        {
+          label = " npm install",
+          type = "shell",
+          command = "npm i",
+          filetypes = { "typescript" }, -- remove field to always add
+        },
+      },
   ignore_input_default = false -- always ignore an input default if `true`
 })
 EOF
@@ -332,9 +344,9 @@ In your project root set up `.vscode/tasks.json` (default config directory set t
 ```lua
 lua require("telescope").extensions.vstask.tasks() -- open task list in telescope
 lua require("telescope").extensions.vstask.inputs() -- open the input list, set new input
+lua require("telescope").extensions.vstask.jobs() -- view and manage all jobs (running and completed)
 lua require("telescope").extensions.vstask.history() -- search history of tasks
 lua require("telescope").extensions.vstask.close() -- close the task runner (if toggleterm)
-lua require("telescope").extensions.vstask.jobs() -- view and manage background tasks (Enter to kill)
 lua require("telescope").extensions.vstask.run() -- open menu to type cli cmd and run it with standard bindings
 ```
 
@@ -370,11 +382,9 @@ All [variables available in VS Code](https://code.visualstudio.com/docs/editor/v
 At this point only the features I need professionally have been implemented.
 The implemented schema elements are as follows:
 
-- [x] Tasks: Label
-- [x] Tasks: Command
-- [x] Tasks: ID
-- [x] Inputs: Description
-- [x] Inputs: Default
+- [] dependsOn visual layouts
+- [] problemMatcher
+- [] auto run job on opening certain files
 
 As I do not use VS Code, the current implementation are the elements that seem
 most immediately useful. In the future it may be good to look into implementing

@@ -5,9 +5,7 @@ local pickers = require("telescope.pickers")
 local sorters = require("telescope.sorters")
 local previewers = require("telescope.previewers")
 local Parse = require("vstask.Parse")
-local Opts = require("vstask.Opts")
-local quickfix = require("vstask.Quickfix")
-local Command_handler = nil
+local Job = require("vstask.Job")
 local Mappings = {
 	vertical = "<C-v>",
 	split = "<C-p>",
@@ -19,211 +17,155 @@ local Mappings = {
 	run = "<C-r>",
 }
 
-local command_history = {}
-local background_jobs = {}
-local job_history = {}
-local live_output_buffers = {} -- Track buffers showing live job output
-
-local process_command_background = function(label, command, silent, watch, on_complete)
-	local function notify(msg, level)
-		if not silent then
-			vim.notify(msg, level, { title = "vs-tasks" })
-		end
-	end
-
-	if watch then
-		Add_watch_autocmd()
-	end
-
-	notify("Running in background: " .. command, vim.log.levels.INFO)
-
-	local output = {}
-	local job_id
-	job_id = vim.fn.jobstart(command, {
-		on_stdout = function(_, data)
-			if data then
-				vim.list_extend(output, data)
-				-- Update live output buffer if it exists
-				if live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
-					vim.schedule(function()
-						vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, output)
-						-- Always scroll to bottom for live updates
-						local win = vim.fn.bufwinid(live_output_buffers[job_id])
-						if win ~= -1 then
-							local line_count = vim.api.nvim_buf_line_count(live_output_buffers[job_id])
-							vim.api.nvim_win_set_cursor(win, { line_count, 0 })
-						end
-					end)
-				end
-				-- Trigger update for preview buffers
-				vim.schedule(function()
-					vim.api.nvim_exec_autocmds("User", { pattern = "VsTaskJobOutput" })
-				end)
-			end
-		end,
-		on_stderr = function(_, data)
-			if data then
-				vim.list_extend(output, data)
-				-- Update live output buffer if it exists
-				if live_output_buffers[job_id] and vim.api.nvim_buf_is_valid(live_output_buffers[job_id]) then
-					vim.schedule(function()
-						vim.api.nvim_buf_set_lines(live_output_buffers[job_id], 0, -1, false, output)
-						-- Scroll to bottom if cursor was at bottom
-						local win = vim.fn.bufwinid(live_output_buffers[job_id])
-						if win ~= -1 then
-							local curr_line = vim.api.nvim_win_get_cursor(win)[1]
-							local line_count = vim.api.nvim_buf_line_count(live_output_buffers[job_id])
-							if curr_line >= line_count - 5 then
-								vim.api.nvim_win_set_cursor(win, { line_count, 0 })
-							end
-						end
-					end)
-				end
-			end
-		end,
-		on_exit = function(_, exit_code)
-			local job = background_jobs[job_id]
-
-			if job == nil then
-				return
-			end
-
-			if exit_code == 0 then
-				notify("🟢 Background job completed successfully : " .. job.label, vim.log.levels.INFO)
-			else
-				notify("🔴 Background job failed." .. job.label, vim.log.levels.ERROR)
-				quickfix.toquickfix(table.concat(output, "\n"))
-			end
-
-			-- Always record end time and exit code
-			background_jobs[job_id].end_time = os.time()
-			background_jobs[job_id].exit_code = exit_code
-
-			-- Add to history unless it's a watch job
-			if not job.watch then
-				table.insert(job_history, {
-					label = job.label,
-					end_time = os.time(),
-					start_time = job.start_time or os.time(), -- Ensure we always have a start_time
-					exit_code = exit_code,
-					output = job.output,
-				})
-				background_jobs[job_id] = nil
-			end
-			if on_complete ~= nil then
-				on_complete()
-			end
-		end,
-	})
-
-	if job_id <= 0 then
-		notify("Failed to start background job: " .. command, vim.log.levels.ERROR)
-	else
-		background_jobs[job_id] = {
-			id = job_id,
-			command = command,
-			start_time = os.time(),
-			output = output,
-			watch = watch,
-			label = label,
-			end_time = 0,
-			exit_code = -1,
-		}
-	end
-end
-
-local function clean_command(pre, options)
-	local command = pre
-	if type(options) == "table" then
-		local cwd = options["cwd"]
-		if type(cwd) == "string" then
-			local cd_command = string.format("cd %s", cwd)
-			command = string.format("%s && %s", cd_command, command)
-		end
-	end
-	return command
-end
-
-local function set_history(label, command, options)
-	if not command_history[label] then
-		command_history[label] = {
-			command = command,
-			options = options,
-			label = label,
-			hits = 1,
-		}
-	else
-		command_history[label].hits = command_history[label].hits + 1
-	end
-	Parse.Used_task(label)
-end
-
 local last_cmd = nil
-local Term_opts = {}
-
+Picker = nil
 local function set_term_opts(new_opts)
 	Term_opts = new_opts
+end
+
+local function format_job_entry(job_info, is_running)
+	local runtime
+	if is_running then
+		runtime = os.time() - job_info.start_time
+	else
+		runtime = (job_info.end_time or os.time()) - job_info.start_time
+	end
+
+	local formatted = string.format("%s - (runtime %ds)", job_info.label, runtime)
+	if job_info.watch then
+		formatted = "👀 " .. formatted
+	end
+
+	if is_running then
+		formatted = "🟠 " .. formatted
+	else
+		if job_info.exit_code == 0 then
+			formatted = "🟢 " .. formatted
+		else
+			formatted = string.format("🔴 [exit code - (%d)] ", job_info.exit_code) .. formatted
+		end
+	end
+
+	return formatted
+end
+
+-- Format the jobs list for display
+local function format_jobs_list(jobs_list)
+	local jobs_formatted = {}
+	for _, job_info in ipairs(jobs_list) do
+		local is_running = not job_info.completed and vim.fn.jobwait({ job_info.id }, 0)[1] == -1
+		table.insert(jobs_formatted, format_job_entry(job_info, is_running))
+	end
+	return jobs_formatted
+end
+
+local job_previewer = function(self, entry, jobs_list)
+	local job = jobs_list[entry.index]
+	if not job then
+		return
+	end
+
+	if Job.is_job_running(job.id) then
+		-- For running jobs
+		local preview_key = Job.get_preview_key(self.state.bufnr, job.id)
+		if not Job.is_preview_configured(preview_key) then
+			Job.configure_preview(preview_key, job.id, self.state.bufnr)
+		else
+			-- Subsequent updates
+			local output = Job.get_buffer_content(job.id)
+			if output and #output > 0 then
+				Job.preview_job_output(output, self.state.bufnr)
+			else
+			end
+		end
+	else
+		-- For completed jobs, use stored output
+		local background_job = Job.get_background_job(job.id)
+		local output = background_job.output or {}
+		if type(output) == "string" then
+			output = vim.split(output, "\n")
+		end
+		vim.bo[self.state.bufnr].filetype = "sh"
+		Job.preview_job_output(output, self.state.bufnr)
+	end
+end
+
+local refresh_picker = function()
+	local jobs_list = Job.build_jobs_list()
+	local jobs_formatted = format_jobs_list(jobs_list)
+	if Picker then
+		Picker:refresh(
+			finders.new_table({
+				results = jobs_formatted,
+			}),
+			{ reset_prompt = false }
+		)
+	end
 end
 
 local function get_last()
 	return last_cmd
 end
 
--- Helper function to find a task by label
-local function find_task_by_label(label, task_list)
-	for _, task in ipairs(task_list) do
-		if task.label == label then
-			return task
+local function command_input(opts)
+	opts = opts or {}
+
+	-- Create an input dialog
+	local selected_key = nil
+	local input_opts = {
+		prompt = "Enter command: ",
+		callback = function(command)
+			if command and command ~= "" then
+				-- Store the command
+				last_cmd = command
+
+				-- Get the key that was used to submit
+				local key = selected_key or Mappings.current
+				local direction
+				for k, v in pairs(Mappings) do
+					if v == key then
+						direction = k
+						break
+					end
+				end
+
+				Job.start_job({
+					label = "Command: " .. command,
+					command = command,
+					silent = false,
+					watch = direction == "watch_job",
+					terminal = direction ~= "background_job",
+					direction = direction,
+					on_complete = function()
+						refresh_picker()
+					end,
+				})
+
+				-- Schedule the mode change to happen after the input is processed
+				vim.schedule(function()
+					vim.cmd("stopinsert")
+				end)
+			end
+		end,
+	}
+
+	-- Create custom mappings for the input buffer
+	local map_opts = { noremap = true, silent = true }
+	local function create_key_handler(key)
+		return function()
+			selected_key = key
+			vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, true, true), "n")
 		end
 	end
-	return nil
-end
 
--- Run dependent tasks sequentially in background
-local function run_dependent_tasks(task, task_list)
-	local deps = type(task.dependsOn) == "string" and { task.dependsOn } or task.dependsOn
-	local task_queue = {}
+	vim.keymap.set("i", Mappings.background_job, create_key_handler(Mappings.background_job), map_opts)
+	vim.keymap.set("i", Mappings.vertical, create_key_handler(Mappings.vertical), map_opts)
+	vim.keymap.set("i", Mappings.split, create_key_handler(Mappings.split), map_opts)
+	vim.keymap.set("i", Mappings.tab, create_key_handler(Mappings.tab), map_opts)
+	vim.keymap.set("i", Mappings.watch_job, create_key_handler(Mappings.watch_job), map_opts)
 
-	-- Run each dependent task
-	for _, dep_label in ipairs(deps) do
-		local dep_task = find_task_by_label(dep_label, task_list)
-		if dep_task then
-			local command = clean_command(dep_task.command, dep_task.options)
-			task_queue[#task_queue + 1] = { label = dep_task.label, command = command }
-		else
-			vim.notify("Dependent task not found: " .. dep_label, vim.log.levels.ERROR)
-		end
-	end
-	-- add the original task to the queue
-	if task.command ~= nil then
-		task_queue[#task_queue + 1] = { label = task.label, command = clean_command(task.command, task.options) }
-	end
-
-	local function report_done()
-		vim.notify("All dependent tasks completed", vim.log.levels.INFO)
-	end
-
-	local function run_next_task()
-		if #task_queue == 0 then
-			report_done()
-			return
-		end
-		local next_task = table.remove(task_queue, 1)
-		process_command_background(next_task.label, next_task.command, false, false, run_next_task)
-	end
-
-	local function run_all_tasks()
-		-- Run all tasks in parallel
-		for _, parallel_task in ipairs(task_queue) do
-			process_command_background(parallel_task.label, parallel_task.command, false, false)
-		end
-	end
-
-	if task.dependsOrder ~= nil and task.dependsOrder == "sequence" then
-		run_next_task()
-	else
-		run_all_tasks()
-	end
+	-- Show the input dialog
+	vim.ui.input(input_opts, input_opts.callback)
 end
 
 local function set_mappings(new_mappings)
@@ -232,98 +174,7 @@ local function set_mappings(new_mappings)
 	end
 end
 
-local function toggle_watch(id)
-	background_jobs[id].watch = not background_jobs[id].watch
-end
-
-local function preview_job_output(output, bufnr, job_id)
-	local max_lines = 1000 -- Show last 1000 lines
-	local start_idx = #output > max_lines and #output - max_lines or 0
-	local recent_output = vim.list_slice(output, start_idx + 1)
-	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, recent_output)
-	vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
-	-- Scroll to bottom of preview
-	vim.schedule(function()
-		local win = vim.fn.bufwinid(bufnr)
-		if win ~= -1 then
-			vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(bufnr), 0 })
-			vim.api.nvim_set_option_value("filetype", "sh", { buf = bufnr })
-		end
-	end)
-
-	-- Set up live updates for preview if job is running
-	if job_id then
-		local job = background_jobs[job_id]
-		if job then
-			-- Create autocmd to update preview buffer
-			vim.api.nvim_create_autocmd("User", {
-				pattern = "VsTaskJobOutput",
-				callback = function()
-					if vim.api.nvim_buf_is_valid(bufnr) then
-						preview_job_output(job.output, bufnr)
-					end
-				end,
-			})
-		end
-	end
-end
-local function open_job_output(output, job_id, direction)
-	local buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
-
-	if direction == "vertical" then
-		vim.cmd("vsplit")
-	end
-
-	vim.api.nvim_win_set_buf(0, buf)
-	vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
-
-	-- Set buffer name to indicate live status
-	if job_id then
-		local job = background_jobs[job_id]
-		if job then
-			vim.api.nvim_buf_set_name(buf, string.format("Job Output - %s (Live)", job.label))
-			live_output_buffers[job_id] = buf
-
-			-- Set buffer local autocmd to clean up when buffer is closed
-			vim.api.nvim_create_autocmd("BufWipeout", {
-				buffer = buf,
-				callback = function()
-					live_output_buffers[job_id] = nil
-				end,
-			})
-		end
-	end
-end
-
-local process_command = function(command, direction, opts)
-	last_cmd = command
-	if Command_handler ~= nil then
-		Command_handler(command, direction, opts)
-	else
-		local opt_direction = Opts.get_direction(direction, opts)
-		local size = Opts.get_size(direction, opts)
-		local command_map = {
-			vertical = { size = "vertical resize", command = "vsplit" },
-			horizontal = { size = "resize ", command = "split" },
-			tab = { command = "tabnew" },
-		}
-
-		if command_map[opt_direction] ~= nil then
-			vim.cmd(command_map[opt_direction].command)
-			if command_map[opt_direction].size ~= nil and size ~= nil then
-				vim.cmd(command_map[opt_direction].size .. size)
-			end
-		end
-		vim.cmd(string.format('terminal echo "%s" && %s', command, command))
-	end
-end
-
-local function set_command_handler(handler)
-	Command_handler = handler
-end
-
-local function inputs(opts)
+local function inputs_picker(opts)
 	opts = opts or {}
 
 	local input_list = Parse.Inputs()
@@ -363,7 +214,7 @@ local function inputs(opts)
 			sorter = sorters.get_generic_fuzzy_sorter(),
 			attach_mappings = function(prompt_bufnr, map)
 				local start_task = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
+					local selection = state.get_selected_entry()
 					actions.close(prompt_bufnr)
 
 					local input = selection_list[selection.index]["id"]
@@ -380,7 +231,7 @@ local function inputs(opts)
 end
 
 local function handle_direction(direction, prompt_bufnr, selection_list, is_launch, opts)
-	local selection = state.get_selected_entry(prompt_bufnr)
+	local selection = state.get_selected_entry()
 	actions.close(prompt_bufnr)
 
 	local command, options, label, args
@@ -394,7 +245,6 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		options = nil
 		label = "CMD: " .. current_line
 		args = nil
-		set_history(label, command, options)
 	elseif is_launch then
 		command = selection_list[selection.index]["program"]
 		options = selection_list[selection.index]["options"]
@@ -406,10 +256,9 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		options = selection_list[selection.index]["options"]
 		label = selection_list[selection.index]["label"]
 		args = selection_list[selection.index]["args"]
-		set_history(label, command, options)
 	end
 
-	local cleaned = clean_command(command, options)
+	local cleaned = Job.clean_command(command, options)
 
 	if args ~= nil then
 		cleaned = Parse.replace(cleaned)
@@ -425,25 +274,30 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		end
 	end
 
+	-- Update task usage tracking before running
+	if task then
+		Parse.Used_task(task.label)
+	end
+
 	if task and task.dependsOn then
-		run_dependent_tasks(task, selection_list, function()
-			process_command_background(label, cleaned, false, direction == "watch_job")
-		end)
+		Job.run_dependent_tasks(task, selection_list)
 		return
 	end
 
-	if direction == "background_job" or direction == "watch_job" then
-		-- If task has dependencies, run them first
-		process_command_background(label, cleaned, false, direction == "watch_job")
-	else
-		local process = function(prepared_command)
-			process_command(prepared_command, direction, Term_opts)
-			if direction ~= "current" then
-				vim.cmd("normal! G")
-			end
-		end
-		Parse.replace_and_run(cleaned, process, opts)
+	local process = function(prepared_command)
+		Job.start_job({
+			label = label,
+			command = prepared_command,
+			silent = false,
+			watch = direction == "watch_job",
+			terminal = direction ~= "background_job" and direction ~= "watch_job",
+			direction = direction,
+			on_complete = function()
+				refresh_picker()
+			end,
+		})
 	end
+	Parse.replace_and_run(cleaned, process, opts)
 end
 
 local function start_launch_direction(direction, prompt_bufnr, _, selection_list, opts)
@@ -454,61 +308,7 @@ local function start_task_direction(direction, prompt_bufnr, _, selection_list, 
 	handle_direction(direction, prompt_bufnr, selection_list, false, opts)
 end
 
-local function history(opts)
-	if vim.tbl_isempty(command_history) then
-		return
-	end
-	-- sort command history by hits
-	local sorted_history = {}
-	for _, command in pairs(command_history) do
-		table.insert(sorted_history, command)
-	end
-	table.sort(sorted_history, function(a, b)
-		return a.hits > b.hits
-	end)
-
-	-- build label table
-	local labels = {}
-	for i = 1, #sorted_history do
-		local current_task = sorted_history[i]["label"]
-		table.insert(labels, current_task)
-	end
-
-	pickers
-		.new(opts, {
-			prompt_title = "Task History",
-			finder = finders.new_table({
-				results = labels,
-			}),
-			sorter = sorters.get_generic_fuzzy_sorter(),
-			attach_mappings = function(prompt_bufnr, map)
-				local function start_task()
-					start_task_direction("current", prompt_bufnr, map, sorted_history, opts)
-				end
-				local function start_task_vertical()
-					start_task_direction("vertical", prompt_bufnr, map, sorted_history, opts)
-				end
-				local function start_task_split()
-					start_task_direction("horizontal", prompt_bufnr, map, sorted_history, opts)
-				end
-				local function start_task_tab()
-					start_task_direction("tab", prompt_bufnr, map, sorted_history, opts)
-				end
-				map("i", Mappings.current, start_task)
-				map("n", Mappings.current, start_task)
-				map("i", Mappings.vertical, start_task_vertical)
-				map("n", Mappings.vertical, start_task_vertical)
-				map("i", Mappings.split, start_task_split)
-				map("n", Mappings.split, start_task_split)
-				map("i", Mappings.tab, start_task_tab)
-				map("n", Mappings.tab, start_task_tab)
-				return true
-			end,
-		})
-		:find()
-end
-
-local function tasks(opts)
+local function tasks_picker(opts)
 	opts = opts or {}
 
 	local task_list = Parse.Tasks()
@@ -568,13 +368,7 @@ local function tasks(opts)
 		:find()
 end
 
-local function tasks_empty(opts)
-	opts = opts or {}
-	opts.run_empty = true
-	tasks(opts)
-end
-
-local function launches(opts)
+local function launches_picker(opts)
 	opts = opts or {}
 
 	local launch_list = Parse.Launches()
@@ -623,27 +417,74 @@ local function launches(opts)
 end
 
 local function restart_watched_jobs()
-	for _, job_info in pairs(background_jobs) do
+	-- Store current window, cursor position, and mode
+	local current_win = vim.api.nvim_get_current_win()
+	local current_pos = vim.api.nvim_win_get_cursor(current_win)
+	local current_buf = vim.api.nvim_get_current_buf()
+	local current_mode = vim.api.nvim_get_mode().mode
+
+	for _, job_info in pairs(Job.get_background_jobs()) do
 		if job_info.watch then
 			local command = job_info.command
 			local job_id = job_info.id
-			-- Stop the job and wait for confirmation before starting new one
+			local job_label = job_info.label
+
+			-- Find and delete the buffer associated with this job
+			for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+				if vim.api.nvim_buf_is_valid(buf_id) then
+					local buf_name = vim.api.nvim_buf_get_name(buf_id)
+					if buf_name:match(vim.pesc(Job.LABEL_PRE .. job_label)) then
+						-- Force delete the buffer
+						vim.api.nvim_buf_delete(buf_id, { force = true })
+						break
+					end
+				end
+			end
+
+			-- Stop the job
 			vim.fn.jobstop(job_id)
 
 			-- Use timer to ensure job is fully stopped before restarting
-			local job_status = vim.fn.jobwait({ job_id }, -1)[1]
-			local is_running = job_status == -1
-			if not is_running then
+			if not Job.is_running(job_id) then
 				-- Remove from background_jobs to prevent duplicate entries
-				background_jobs[job_id] = nil
+				Job.set_background_job(job_id, nil)
+
+				-- Remove from live_output_buffers if present
+				Job.remove_live_output_buffer(job_id)
 
 				-- Job is confirmed stopped, start new one
-				process_command_background(job_info.label, command, false, true)
+				vim.schedule(function()
+					Job.start_job({
+						label = job_label,
+						command = command,
+						silent = false,
+						watch = true,
+						terminal = false, -- Start in background
+						on_complete = function()
+							refresh_picker()
+						end,
+					})
+				end)
 			else
 				vim.notify(string.format("Job %d is still running, skipping restart", job_id), vim.log.levels.INFO)
 			end
 		end
 	end
+
+	-- Restore cursor position and mode if we're still in the same buffer
+	vim.schedule(function()
+		if
+			vim.api.nvim_win_is_valid(current_win)
+			and vim.api.nvim_buf_is_valid(current_buf)
+			and vim.api.nvim_win_get_buf(current_win) == current_buf
+		then
+			vim.api.nvim_win_set_cursor(current_win, current_pos)
+			-- If we were in normal mode, ensure we return to it
+			if current_mode == "n" then
+				vim.cmd("stopinsert")
+			end
+		end
+	end)
 end
 
 function Add_watch_autocmd()
@@ -666,200 +507,107 @@ function Add_watch_autocmd()
 	end
 end
 
-local function format_job_entry(job_info, is_running)
-	local runtime
-	if is_running then
-		runtime = os.time() - job_info.start_time - (job_info.end_time or 0)
-	else
-		runtime = job_info.end_time - job_info.start_time
-	end
-
-	local formatted = string.format("%s - (runtime %ds)", job_info.label, runtime)
-	if job_info.watch then
-		formatted = "👀 " .. formatted
-	end
-
-	if is_running then
-		formatted = "🟠 " .. formatted
-	else
-		if job_info.exit_code == 0 then
-			formatted = "🟢 " .. formatted
-		else
-			formatted = string.format("🔴 [exit code - (%d)] ", job_info.exit_code) .. formatted
-		end
-	end
-
-	return formatted
-end
-
-local function background_jobs_list(opts)
+local function jobs_picker(opts)
 	opts = opts or {}
 
-	local jobs_list = {}
-	local jobs_formatted = {}
-
-	for job_id, job_info in pairs(background_jobs) do
-		table.insert(jobs_list, job_info)
-		local job_status = vim.fn.jobwait({ job_id }, 0)[1]
-		local is_running = job_status == -1
-		table.insert(jobs_formatted, format_job_entry(job_info, is_running))
-	end
+	local jobs_list = Job.build_jobs_list()
+	local jobs_formatted = format_jobs_list(jobs_list)
 
 	if vim.tbl_isempty(jobs_formatted) then
-		vim.notify("No background jobs running", vim.log.levels.INFO)
+		vim.notify("No jobs available", vim.log.levels.INFO)
 		return
 	end
 
-	-- Sort jobs_list by start_time (most recent first)
-	table.sort(jobs_list, function(a, b)
-		return a.start_time > b.start_time
-	end)
-
-	pickers
-		.new(opts, {
-			prompt_title = "Background Jobs",
-			finder = finders.new_table({
-				results = jobs_formatted,
-			}),
-			sorter = sorters.get_generic_fuzzy_sorter(),
-			previewer = previewers.new_buffer_previewer({
-				title = "Job Output",
-				define_preview = function(self, entry)
-					local job = jobs_list[entry.index]
-					local output = job.output or {}
-					preview_job_output(output, self.state.bufnr, job.id)
-				end,
-			}),
-			attach_mappings = function(prompt_bufnr, map)
-				local kill_job = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
-
-					local job = jobs_list[selection.index]
-					vim.fn.jobstop(job.id)
-					vim.notify(string.format("Killed job %d: %s", job.id, job.command), vim.log.levels.INFO)
-					background_jobs[job.id] = nil
-				end
-
-				local toggle_watch_binding = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
-					local job = jobs_list[selection.index]
-					toggle_watch(job.id)
-				end
-
-				local open_history = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
-					local job = jobs_list[selection.index]
-					local output = job.output or {}
-					open_job_output(output, job.id)
-				end
-
-				local open_in_temp_buffer_vertical = function()
-					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
-					local job = jobs_list[selection.index]
-					local output = job.output or {}
-					open_job_output(output, job.id, "vertical")
-				end
-
-				map("i", Mappings.kill_job, kill_job)
-				map("n", Mappings.kill_job, kill_job)
-				map("i", Mappings.current, open_history)
-				map("n", Mappings.current, open_history)
-				map("i", Mappings.split, open_in_temp_buffer_vertical)
-				map("n", Mappings.split, open_in_temp_buffer_vertical)
-				map("i", Mappings.watch_job, toggle_watch_binding)
-				map("n", Mappings.watch_job, toggle_watch_binding)
-
-				return true
+	Picker = pickers.new(opts, {
+		prompt_title = "Jobs",
+		finder = finders.new_table({
+			results = jobs_formatted,
+		}),
+		sorter = sorters.get_generic_fuzzy_sorter(),
+		previewer = previewers.new_buffer_previewer({
+			title = "Jobs",
+			define_preview = function(self, entry)
+				return job_previewer(self, entry, jobs_list)
 			end,
-		})
-		:find()
-end
-
-local function job_history_list(opts)
-	opts = opts or {}
-
-	if vim.tbl_isempty(job_history) then
-		vim.notify("No job history available", vim.log.levels.INFO)
-		return
-	end
-
-	-- Create a copy of job_history to avoid modifying the original
-	local sorted_history = vim.deepcopy(job_history)
-
-	-- Sort by start_time (most recent first)
-	table.sort(sorted_history, function(a, b)
-		return a.start_time > b.start_time
-	end)
-
-	local jobs_formatted = {}
-	for _, job_info in ipairs(sorted_history) do
-		table.insert(jobs_formatted, format_job_entry(job_info, false))
-	end
-
-	pickers
-		.new(opts, {
-			prompt_title = "Job History",
-			finder = finders.new_table({
-				results = jobs_formatted,
-			}),
-			sorter = sorters.get_generic_fuzzy_sorter(),
-			previewer = previewers.new_buffer_previewer({
-				title = "Job Info",
-				define_preview = function(self, entry)
-					local job = job_history[entry.index]
-					local output = job.output or {}
-					preview_job_output(output, self.state.bufnr)
-				end,
-			}),
-			attach_mappings = function(prompt_bufnr, map)
-				local function open_in_temp_buffer()
-					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
-					local job = job_history[selection.index]
-					local output = job.output or {}
-					local buf = vim.api.nvim_create_buf(false, true)
-					vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
-					vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
-					vim.api.nvim_win_set_buf(0, buf)
+		}),
+		attach_mappings = function(prompt_bufnr, map)
+			local kill_job = function()
+				local selection = state.get_selected_entry()
+				local selected_job = jobs_list[selection.index]
+				if not selected_job or not selected_job.id then
+					return
 				end
 
-				local function open_in_temp_buffer_vertical()
-					local selection = state.get_selected_entry(prompt_bufnr)
-					actions.close(prompt_bufnr)
-					local job = job_history[selection.index]
-					vim.cmd("vsplit")
-					local output = job.output or {}
-					local buf = vim.api.nvim_create_buf(false, true)
-					vim.api.nvim_buf_set_lines(buf, 0, -1, false, output)
-					vim.api.nvim_set_option_value("filetype", "sh", { buf = buf })
-					vim.api.nvim_win_set_buf(0, buf)
-				end
+				local job = Job.get_background_job(selected_job.id)
 
-				map("i", Mappings.current, open_in_temp_buffer)
-				map("n", Mappings.current, open_in_temp_buffer)
-				map("i", Mappings.vertical, open_in_temp_buffer_vertical)
-				map("n", Mappings.vertical, open_in_temp_buffer_vertical)
+				-- Close the picker first
+				actions.close(prompt_bufnr)
+				Job.fully_clear_job(job)
+				jobs_picker(opts)
+			end
+			local toggle_watch_binding = function()
+				local selection = state.get_selected_entry()
+				local job = jobs_list[selection.index]
+				actions.close(prompt_bufnr)
+				Job.toggle_watch(job.id)
+				jobs_picker(opts)
+			end
 
-				return true
-			end,
-		})
-		:find()
+			local open_job = function()
+				local selection = state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				local job = jobs_list[selection.index]
+				-- Update last selected time
+				Job.job_selected(job.id)
+				Job.open_buffer(job.label)
+			end
+
+			local open_vertical = function()
+				local selection = state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				local job = jobs_list[selection.index]
+				-- Update last selected time
+				Job.job_selected(job.id)
+				Job.split_to_direction("vertical")
+				Job.open_buffer(job.label)
+			end
+
+			local open_horizontal = function()
+				local selection = state.get_selected_entry()
+				actions.close(prompt_bufnr)
+				local job = jobs_list[selection.index]
+				-- Update last selected time
+				Job.job_selected(job.id)
+				Job.split_to_direction("horizontal")
+				Job.open_buffer(job.label)
+			end
+
+			map("i", Mappings.kill_job, kill_job)
+			map("n", Mappings.kill_job, kill_job)
+			map("i", Mappings.current, open_job)
+			map("n", Mappings.current, open_job)
+			map("i", Mappings.split, open_horizontal)
+			map("n", Mappings.split, open_horizontal)
+			map("i", Mappings.vertical, open_vertical)
+			map("n", Mappings.vertical, open_vertical)
+			map("i", Mappings.watch_job, toggle_watch_binding)
+			map("n", Mappings.watch_job, toggle_watch_binding)
+
+			return true
+		end,
+	})
+	if Picker then
+		Picker:find()
+	end
 end
 
 return {
-	Launch = launches,
-	Tasks = tasks,
-	Tasks_empty = tasks_empty,
-	Inputs = inputs,
-	History = history,
-	Jobs = background_jobs_list,
-	JobHistory = job_history_list,
-	Set_command_handler = set_command_handler,
+	Launch = launches_picker,
+	Tasks = tasks_picker,
+	Inputs = inputs_picker,
+	Jobs = jobs_picker,
 	Set_mappings = set_mappings,
 	Set_term_opts = set_term_opts,
 	Get_last = get_last,
+	Command = command_input,
 }

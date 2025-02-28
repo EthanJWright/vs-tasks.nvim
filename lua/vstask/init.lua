@@ -9,9 +9,6 @@ local function config(opts)
 	if opts == nil then
 		return
 	end
-	if opts.terminal ~= nil and opts.terminal == "toggleterm" then
-		M.Telescope.Set_command_handler(require("vstask.ToggleTerm").Process)
-	end
 	if opts.telescope_keys ~= nil then
 		M.Telescope.Set_mappings(opts.telescope_keys)
 	end
@@ -32,6 +29,12 @@ local function config(opts)
 	end
 	if opts.json_parser ~= nil then
 		M.Parse.Set_json_parser(opts.json_parser)
+	end
+	if opts.buffer_options ~= nil then
+		M.Parse.Set_buffer_options(opts.buffer_options)
+	end
+	if opts.default_tasks ~= nil then
+		M.Parse.Set_default_tasks(opts.default_tasks)
 	end
 	if opts.ignore_input_default ~= nil and opts.ignore_input_default == true then
 		M.Parse.ignore_input_default()

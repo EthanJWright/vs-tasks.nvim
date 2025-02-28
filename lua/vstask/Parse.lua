@@ -3,7 +3,12 @@ local Config = require("vstask.Config")
 local Predefined = require("vstask.Predefined")
 
 local cache_json_conf = true
+local buffer_options = { "relativenumber" }
 Ignore_input_default = false
+
+local function set_buffer_options(opts)
+	buffer_options = opts
+end
 
 local function set_ignore_input_default()
 	Ignore_input_default = true
@@ -21,6 +26,70 @@ end
 local auto_detect = {
 	npm = "on",
 }
+
+local default_tasks = {}
+
+local function set_default_tasks(tasks)
+	if type(tasks) == "table" then
+		default_tasks = tasks
+		-- Mark these tasks as coming from default configuration
+		for _, task in ipairs(default_tasks) do
+			task.source = "default"
+		end
+	end
+end
+
+-- Get current buffer's filetype
+local function get_current_filetype()
+	return vim.bo.filetype
+end
+
+-- Check if a task matches the current filetype
+-- Check if two tasks are equivalent (same label and type)
+local function tasks_are_equivalent(task1, task2)
+	return task1.label == task2.label and task1.type == task2.type
+end
+
+-- Check if a task already exists in a task list
+local function task_exists(task, task_list)
+	for _, existing_task in ipairs(task_list) do
+		if tasks_are_equivalent(task, existing_task) then
+			return true
+		end
+	end
+	return false
+end
+
+local function task_matches_filetype(task, current_ft)
+	-- If no filetypes specified, task is available for all filetypes
+	if not task.filetypes then
+		return true
+	end
+
+	-- Handle both string and table formats for filetypes
+	if type(task.filetypes) == "string" then
+		return task.filetypes == current_ft
+	elseif type(task.filetypes) == "table" then
+		for _, ft in ipairs(task.filetypes) do
+			if ft == current_ft then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- Filter tasks based on filetype
+local function filter_tasks_by_filetype(tasks)
+	local current_ft = get_current_filetype()
+	local filtered_tasks = {}
+	for _, task in ipairs(tasks) do
+		if task_matches_filetype(task, current_ft) then
+			table.insert(filtered_tasks, task)
+		end
+	end
+	return filtered_tasks
+end
 
 local function should_handle_pick_string(input_config)
 	return input_config
@@ -163,33 +232,60 @@ local function hit_sorter(a, b)
 end
 
 local function time_sorter(a, b)
-	return a.timestamp > b.timestamp
+	-- First compare last_used timestamps
+	if a.last_used and b.last_used then
+		return a.last_used > b.last_used
+	elseif a.last_used then
+		return true
+	elseif b.last_used then
+		return false
+	end
+
+	-- For unused tasks, prioritize by source
+	if a.entry.source ~= b.entry.source then
+		if a.entry.source == "tasks.json" then
+			return true
+		elseif b.entry.source == "tasks.json" then
+			return false
+		end
+	end
+
+	-- Preserve original order using the index
+	return a.original_index < b.original_index
 end
 
 local function cache_scheme(cache_list, fn)
-	local tasks_with_hits = {}
-	local other_tasks = {}
+	local used_tasks = {}
+	local unused_tasks = {}
+
+	-- Split tasks into used and unused
 	for _, task in pairs(cache_list) do
-		if task.hits > 0 then
-			table.insert(tasks_with_hits, task)
+		if task.last_used then
+			table.insert(used_tasks, task)
 		else
-			table.insert(other_tasks, task)
+			table.insert(unused_tasks, task)
 		end
 	end
-	-- return tasks in order of most used
-	table.sort(tasks_with_hits, fn)
+
+	-- Sort both used and unused tasks by the provided sorting function
+	table.sort(used_tasks, fn)
+	table.sort(unused_tasks, fn)
+
+	-- Combine the lists with used tasks first
 	local formatted = {}
-	for _, task in pairs(tasks_with_hits) do
+	for _, task in pairs(used_tasks) do
 		table.insert(formatted, task.entry)
 	end
-	for _, task in pairs(other_tasks) do
+	for _, task in pairs(unused_tasks) do
 		table.insert(formatted, task.entry)
 	end
+
 	return formatted
 end
 
 local function manage_cache(cache_list, scheme)
 	if scheme == nil or scheme == "last" then
+		-- Default to sorting by last_used timestamp
 		return cache_scheme(cache_list, time_sorter)
 	end
 	if scheme == "most" then
@@ -199,26 +295,27 @@ end
 
 local function create_cache(raw_list, key)
 	local new_cache = {}
-	for _, entry in pairs(raw_list) do
+	for index, entry in ipairs(raw_list) do
 		local cache_key = entry[key]
 		if cache_key then
-			new_cache[cache_key] = { entry = entry, hits = 0, timestamp = os.time() }
+			new_cache[cache_key] = {
+				entry = entry,
+				hits = 0,
+				timestamp = os.time(),
+				last_used = nil,
+				original_index = index, -- Track original position
+			}
 		end
 	end
 	return new_cache
 end
 
 local function update_cache(cache, key)
-	if cache == nil then
+	if cache == nil or cache[key] == nil then
 		return
 	end
-	if cache[key] == nil then
-		return
-	end
-	if cache[key] ~= nil then
-		cache[key].hits = cache[key].hits + 1
-		cache[key].timestamp = os.time()
-	end
+	cache[key].hits = cache[key].hits + 1
+	cache[key].last_used = os.time()
 end
 
 local function auto_detect_npm()
@@ -258,14 +355,33 @@ local function notify_missing_task_file()
 end
 
 local function get_tasks()
+	local task_list = {}
+
 	if task_cache ~= nil and cache_json_conf then
-		return manage_cache(task_cache, CACHE_STRATEGY)
+		task_list = manage_cache(task_cache, CACHE_STRATEGY)
+
+		-- Check for any new default tasks that should be added based on filetype
+		local current_ft = get_current_filetype()
+		for _, default_task in ipairs(default_tasks) do
+			if task_matches_filetype(default_task, current_ft) and not task_exists(default_task, task_list) then
+				table.insert(task_list, default_task)
+				-- Add to cache as well
+				if not task_cache[default_task.label] then
+					task_cache[default_task.label] = {
+						entry = default_task,
+						hits = 0,
+						timestamp = os.time(),
+						last_used = nil,
+						original_index = #task_list,
+					}
+				end
+			end
+		end
+		return task_list
 	end
 
 	local cwd = vim.fn.getcwd()
 	local path = cwd .. "/" .. config_dir .. "/tasks.json"
-
-	local task_list = {}
 
 	get_inputs()
 
@@ -277,6 +393,7 @@ local function get_tasks()
 		end
 
 		for _, task in pairs(tasks["tasks"]) do
+			task.source = "tasks.json" -- Mark tasks from tasks.json
 			table.insert(task_list, task)
 		end
 		::continue::
@@ -285,8 +402,18 @@ local function get_tasks()
 	-- add script_tasks to Tasks
 	local script_tasks = auto_detect_npm()
 	for _, task in pairs(script_tasks) do
+		task.source = "npm" -- Mark tasks from npm
 		table.insert(task_list, task)
 	end
+
+	-- add default tasks to Tasks
+	for _, task in ipairs(default_tasks) do
+		table.insert(task_list, task)
+	end
+
+	-- Filter tasks by filetype
+	task_list = filter_tasks_by_filetype(task_list)
+
 	-- add each task to cached while initializing 'hits' as 0
 	task_cache = create_cache(task_list, "label")
 
@@ -532,5 +659,8 @@ return {
 	Set_config_dir = set_config_dir,
 	Set_json_parser = set_json_parser,
 	Clear_inputs = clear_inputs,
+	Set_buffer_options = set_buffer_options,
+	Set_default_tasks = set_default_tasks,
+	buffer_options = buffer_options,
 	ignore_input_default = set_ignore_input_default,
 }
