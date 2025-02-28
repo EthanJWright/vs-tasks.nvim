@@ -159,6 +159,12 @@ scripts.
   is removed, this will also remove cache features such as remembering last
   ran command
 
+Make sure to load the plugin in your telescope config
+
+```lua
+require("telescope").load_extension("vstask")
+```
+
 ```lua
 lua <<EOF
 require("vstask").setup({
