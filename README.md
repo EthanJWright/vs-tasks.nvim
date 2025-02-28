@@ -202,6 +202,7 @@ require("vstask").setup({
           filetypes = { "typescript" }, -- remove field to always add
         },
       },
+  ignore_input_default = false -- always ignore an input default if `true`
 })
 EOF
 ```

@@ -4,9 +4,14 @@ local Predefined = require("vstask.Predefined")
 
 local cache_json_conf = true
 local buffer_options = { "relativenumber" }
+Ignore_input_default = false
 
 local function set_buffer_options(opts)
-  buffer_options = opts
+	buffer_options = opts
+end
+
+local function set_ignore_input_default()
+	Ignore_input_default = true
 end
 
 local function set_cache_json_conf(value)
@@ -14,8 +19,8 @@ local function set_cache_json_conf(value)
 end
 
 local function clear_inputs()
-  Inputs = {}
-  vim.notify("Inputs cleared", vim.log.levels.INFO)
+	Inputs = {}
+	vim.notify("Inputs cleared", vim.log.levels.INFO)
 end
 
 local auto_detect = {
@@ -42,17 +47,17 @@ end
 -- Check if a task matches the current filetype
 -- Check if two tasks are equivalent (same label and type)
 local function tasks_are_equivalent(task1, task2)
-    return task1.label == task2.label and task1.type == task2.type
+	return task1.label == task2.label and task1.type == task2.type
 end
 
 -- Check if a task already exists in a task list
 local function task_exists(task, task_list)
-    for _, existing_task in ipairs(task_list) do
-        if tasks_are_equivalent(task, existing_task) then
-            return true
-        end
-    end
-    return false
+	for _, existing_task in ipairs(task_list) do
+		if tasks_are_equivalent(task, existing_task) then
+			return true
+		end
+	end
+	return false
 end
 
 local function task_matches_filetype(task, current_ft)
@@ -60,7 +65,7 @@ local function task_matches_filetype(task, current_ft)
 	if not task.filetypes then
 		return true
 	end
-	
+
 	-- Handle both string and table formats for filetypes
 	if type(task.filetypes) == "string" then
 		return task.filetypes == current_ft
@@ -87,52 +92,55 @@ local function filter_tasks_by_filetype(tasks)
 end
 
 local function should_handle_pick_string(input_config)
-  return input_config and input_config.type == "command" and input_config.command == "extension.commandvariable.pickStringRemember"
+	return input_config
+		and input_config.type == "command"
+		and input_config.command == "extension.commandvariable.pickStringRemember"
 end
 
-
 local function handle_pick_string_remember(input, input_config, opts, callback)
-    local pickers = require("telescope.pickers")
-    local finders = require("telescope.finders")
-    local conf = require("telescope.config").values
-    local actions = require("telescope.actions")
-    local action_state = require("telescope.actions.state")
+	local pickers = require("telescope.pickers")
+	local finders = require("telescope.finders")
+	local conf = require("telescope.config").values
+	local actions = require("telescope.actions")
+	local action_state = require("telescope.actions.state")
 
-    -- Extract options from args
-    local options = input_config.args.options or {}
-    local description = input_config.args.description or "Select an option:"
+	-- Extract options from args
+	local options = input_config.args.options or {}
+	local description = input_config.args.description or "Select an option:"
 
-    pickers.new(opts, {
-        prompt_title = description,
-        finder = finders.new_table {
-            results = options,
-            entry_maker = function(entry)
-                return {
-                    value = entry[2],
-                    display = entry[1],
-                    ordinal = entry[1],
-                }
-            end,
-        },
-        sorter = conf.generic_sorter({}),
-        attach_mappings = function(prompt_bufnr, _)
-            actions.select_default:replace(function()
-                actions.close(prompt_bufnr)
-                local selection = action_state.get_selected_entry()
-                if selection then
-                    if Inputs[input] == nil then
-                        Inputs[input] = {}
-                    end
-                    Inputs[input].value = selection.value
-                    Inputs[input].id = input
-                    if callback ~= nil then
-                      callback()
-                    end
-                end
-            end)
-            return true
-        end,
-    }):find()
+	pickers
+		.new(opts, {
+			prompt_title = description,
+			finder = finders.new_table({
+				results = options,
+				entry_maker = function(entry)
+					return {
+						value = entry[2],
+						display = entry[1],
+						ordinal = entry[1],
+					}
+				end,
+			}),
+			sorter = conf.generic_sorter({}),
+			attach_mappings = function(prompt_bufnr, _)
+				actions.select_default:replace(function()
+					actions.close(prompt_bufnr)
+					local selection = action_state.get_selected_entry()
+					if selection then
+						if Inputs[input] == nil then
+							Inputs[input] = {}
+						end
+						Inputs[input].value = selection.value
+						Inputs[input].id = input
+						if callback ~= nil then
+							callback()
+						end
+					end
+				end)
+				return true
+			end,
+		})
+		:find()
 end
 
 local config_dir = ".vscode"
@@ -207,6 +215,9 @@ local function get_inputs()
 		Inputs[input_id] = input_dict
 		-- Set value to default if provided, otherwise empty string
 		Inputs[input_id]["value"] = input_dict["default"] or ""
+		if Ignore_input_default then
+			Inputs[input_id]["value"] = ""
+		end
 
 		::continue::
 	end
@@ -221,90 +232,90 @@ local function hit_sorter(a, b)
 end
 
 local function time_sorter(a, b)
-    -- First compare last_used timestamps
-    if a.last_used and b.last_used then
-        return a.last_used > b.last_used
-    elseif a.last_used then
-        return true
-    elseif b.last_used then
-        return false
-    end
+	-- First compare last_used timestamps
+	if a.last_used and b.last_used then
+		return a.last_used > b.last_used
+	elseif a.last_used then
+		return true
+	elseif b.last_used then
+		return false
+	end
 
-    -- For unused tasks, prioritize by source
-    if a.entry.source ~= b.entry.source then
-        if a.entry.source == "tasks.json" then
-            return true
-        elseif b.entry.source == "tasks.json" then
-            return false
-        end
-    end
+	-- For unused tasks, prioritize by source
+	if a.entry.source ~= b.entry.source then
+		if a.entry.source == "tasks.json" then
+			return true
+		elseif b.entry.source == "tasks.json" then
+			return false
+		end
+	end
 
-    -- Preserve original order using the index
-    return a.original_index < b.original_index
+	-- Preserve original order using the index
+	return a.original_index < b.original_index
 end
 
 local function cache_scheme(cache_list, fn)
-    local used_tasks = {}
-    local unused_tasks = {}
+	local used_tasks = {}
+	local unused_tasks = {}
 
-    -- Split tasks into used and unused
-    for _, task in pairs(cache_list) do
-        if task.last_used then
-            table.insert(used_tasks, task)
-        else
-            table.insert(unused_tasks, task)
-        end
-    end
+	-- Split tasks into used and unused
+	for _, task in pairs(cache_list) do
+		if task.last_used then
+			table.insert(used_tasks, task)
+		else
+			table.insert(unused_tasks, task)
+		end
+	end
 
-    -- Sort both used and unused tasks by the provided sorting function
-    table.sort(used_tasks, fn)
-    table.sort(unused_tasks, fn)
+	-- Sort both used and unused tasks by the provided sorting function
+	table.sort(used_tasks, fn)
+	table.sort(unused_tasks, fn)
 
-    -- Combine the lists with used tasks first
-    local formatted = {}
-    for _, task in pairs(used_tasks) do
-        table.insert(formatted, task.entry)
-    end
-    for _, task in pairs(unused_tasks) do
-        table.insert(formatted, task.entry)
-    end
+	-- Combine the lists with used tasks first
+	local formatted = {}
+	for _, task in pairs(used_tasks) do
+		table.insert(formatted, task.entry)
+	end
+	for _, task in pairs(unused_tasks) do
+		table.insert(formatted, task.entry)
+	end
 
-    return formatted
+	return formatted
 end
 
 local function manage_cache(cache_list, scheme)
-    if scheme == nil or scheme == "last" then
-        -- Default to sorting by last_used timestamp
-        return cache_scheme(cache_list, time_sorter)
-    end
-    if scheme == "most" then
-        return cache_scheme(cache_list, hit_sorter)
-    end
+	if scheme == nil or scheme == "last" then
+		-- Default to sorting by last_used timestamp
+		return cache_scheme(cache_list, time_sorter)
+	end
+	if scheme == "most" then
+		return cache_scheme(cache_list, hit_sorter)
+	end
 end
 
 local function create_cache(raw_list, key)
-    local new_cache = {}
-    for index, entry in ipairs(raw_list) do
-        local cache_key = entry[key]
-        if cache_key then
-            new_cache[cache_key] = {
-                entry = entry,
-                hits = 0,
-                timestamp = os.time(),
-                last_used = nil,
-                original_index = index  -- Track original position
-            }
-        end
-    end
-    return new_cache
+	local new_cache = {}
+	for index, entry in ipairs(raw_list) do
+		local cache_key = entry[key]
+		if cache_key then
+			new_cache[cache_key] = {
+				entry = entry,
+				hits = 0,
+				timestamp = os.time(),
+				last_used = nil,
+				original_index = index, -- Track original position
+			}
+		end
+	end
+	return new_cache
 end
 
 local function update_cache(cache, key)
-    if cache == nil or cache[key] == nil then
-        return
-    end
-    cache[key].hits = cache[key].hits + 1
-    cache[key].last_used = os.time()
+	if cache == nil or cache[key] == nil then
+		return
+	end
+	cache[key].hits = cache[key].hits + 1
+	cache[key].last_used = os.time()
 end
 
 local function auto_detect_npm()
@@ -361,7 +372,7 @@ local function get_tasks()
 						hits = 0,
 						timestamp = os.time(),
 						last_used = nil,
-						original_index = #task_list
+						original_index = #task_list,
 					}
 				end
 			end
@@ -371,7 +382,6 @@ local function get_tasks()
 
 	local cwd = vim.fn.getcwd()
 	local path = cwd .. "/" .. config_dir .. "/tasks.json"
-
 
 	get_inputs()
 
@@ -383,7 +393,7 @@ local function get_tasks()
 		end
 
 		for _, task in pairs(tasks["tasks"]) do
-			task.source = "tasks.json"  -- Mark tasks from tasks.json
+			task.source = "tasks.json" -- Mark tasks from tasks.json
 			table.insert(task_list, task)
 		end
 		::continue::
@@ -392,7 +402,7 @@ local function get_tasks()
 	-- add script_tasks to Tasks
 	local script_tasks = auto_detect_npm()
 	for _, task in pairs(script_tasks) do
-		task.source = "npm"  -- Mark tasks from npm
+		task.source = "npm" -- Mark tasks from npm
 		table.insert(task_list, task)
 	end
 
@@ -450,43 +460,42 @@ local function get_input_variables(command)
 end
 
 local function handle_standard_input(input, callback)
-    -- Handle regular input types
-    local input_val = vim.fn.input(input .. "=", "")
-    if input_val == "clear" then
-        Inputs[input]["value"] = nil
-    else
-        if Inputs[input] == nil then
-            Inputs[input] = { "value", nil }
-        end
-        Inputs[input]["value"] = input_val
-        Inputs[input]["id"] = input
-        if callback ~= nil then
-          callback()
-        end
-    end
+	-- Handle regular input types
+	local input_val = vim.fn.input(input .. "=", "")
+	if input_val == "clear" then
+		Inputs[input]["value"] = nil
+	else
+		if Inputs[input] == nil then
+			Inputs[input] = { "value", nil }
+		end
+		Inputs[input]["value"] = input_val
+		Inputs[input]["id"] = input
+		if callback ~= nil then
+			callback()
+		end
+	end
 end
 
 local get_input_config = function(input)
-    local input_config = nil
-    for _, cfg in pairs(Inputs) do
-        if cfg.id == input then
-            input_config = cfg
-            break
-        end
-    end
-  return input_config
+	local input_config = nil
+	for _, cfg in pairs(Inputs) do
+		if cfg.id == input then
+			input_config = cfg
+			break
+		end
+	end
+	return input_config
 end
 
-
 local function load_input_variable(input, opts)
-  local input_config = get_input_config(input)
+	local input_config = get_input_config(input)
 
-  if should_handle_pick_string(input_config) then
-      handle_pick_string_remember(input, input_config, opts)
-      return
-  end
+	if should_handle_pick_string(input_config) then
+		handle_pick_string_remember(input, input_config, opts)
+		return
+	end
 
-  handle_standard_input(input)
+	handle_standard_input(input)
 end
 
 local function get_predefined_variables(command)
@@ -519,7 +528,7 @@ local find_missing_inputs = function(inputs, input_vars)
 			table.insert(missing, input_var)
 		end
 	end
-  return missing
+	return missing
 end
 
 local function replace_input_vars(input_vars, inputs, command)
@@ -528,77 +537,75 @@ local function replace_input_vars(input_vars, inputs, command)
 		local replace = get_input_variable(replacing, inputs)
 		command = string.gsub(command, replace_pattern, replace)
 	end
-  return command
+	return command
 end
 
 local function replace_predefined_vars(predefined_vars, command)
-  for _, replacing in pairs(predefined_vars) do
-    local func = get_predefined_function(replacing, Predefined)
-    if func ~= nil then
-      local replace_pattern = "${" .. replacing .. "}"
-      command = string.gsub(command, replace_pattern, func())
-    end
-  end
-  return command
+	for _, replacing in pairs(predefined_vars) do
+		local func = get_predefined_function(replacing, Predefined)
+		if func ~= nil then
+			local replace_pattern = "${" .. replacing .. "}"
+			command = string.gsub(command, replace_pattern, func())
+		end
+	end
+	return command
 end
 
 local function command_replacements(input_vars, inputs, predefined_vars, command)
-  command = replace_input_vars(input_vars, inputs, command)
-  command = replace_predefined_vars(predefined_vars, command)
-  return command
+	command = replace_input_vars(input_vars, inputs, command)
+	command = replace_predefined_vars(predefined_vars, command)
+	return command
 end
 
 local get_inputs_and_run = function(input_vars, inputs, predefined_vars, missing, raw_command, callback, opts)
-  local missing_length = #missing
-  local fetched_missing = false
+	local missing_length = #missing
+	local fetched_missing = false
 
-  for index, input in pairs(missing) do
-    local input_config = get_input_config(input)
-    local run_callback = function()
-      if missing_length == index then
-        local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
-        fetched_missing = true
-        callback(command)
-      end
-    end
-    if should_handle_pick_string(input_config) then
-        handle_pick_string_remember(input, input_config, opts, run_callback)
-        return
-    end
-    handle_standard_input(input, run_callback)
-  end
-  if fetched_missing == false then
-    local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
-    callback(command)
-  end
+	for index, input in pairs(missing) do
+		local input_config = get_input_config(input)
+		local run_callback = function()
+			if missing_length == index then
+				local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
+				fetched_missing = true
+				callback(command)
+			end
+		end
+		if should_handle_pick_string(input_config) then
+			handle_pick_string_remember(input, input_config, opts, run_callback)
+			return
+		end
+		handle_standard_input(input, run_callback)
+	end
+	if fetched_missing == false then
+		local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
+		callback(command)
+	end
 end
 
 local get_missing_inputs_from_user = function(missing)
-  for _, input in pairs(missing) do
-    load_input_variable(input)
-  end
+	for _, input in pairs(missing) do
+		load_input_variable(input)
+	end
 end
 
 local get_existing_variables = function(command)
 	local input_vars = get_input_variables(command)
 	local predefined_vars = get_predefined_variables(command)
-  return input_vars, predefined_vars
+	return input_vars, predefined_vars
 end
 
 local extract_variables = function(command, inputs)
-  local input_vars, predefined_vars = get_existing_variables(command)
-  local missing = find_missing_inputs(inputs, input_vars)
-  -- this gets user input
+	local input_vars, predefined_vars = get_existing_variables(command)
+	local missing = find_missing_inputs(inputs, input_vars)
+	-- this gets user input
 	return input_vars, predefined_vars, missing
 end
-
-
 
 local function replace_vars_in_command(command)
 	local inputs = get_inputs()
 	local input_vars, predefined_vars, missing = extract_variables(command, inputs)
-  get_missing_inputs_from_user(missing)
-  command = command_replacements(input_vars, inputs, predefined_vars, command)
+	get_missing_inputs_from_user(missing)
+	command = command_replacements(input_vars, inputs, predefined_vars, command)
 	return command
 end
 
@@ -616,24 +623,24 @@ local function get_launches()
 	end
 	local path = vim.fn.getcwd() .. "/" .. config_dir .. "/launch.json"
 	if not file_exists(path) then
-		vim.notify(MISSING_FILE_MESSAGE,  vim.log.levels.ERROR)
+		vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
 		return {}
 	end
 	get_inputs()
 	local configurations = Config.load_json(path, JSON_PARSER)
 
-  if configurations ~= nil then
-    Launches = configurations["configurations"]
-  end
+	if configurations ~= nil then
+		Launches = configurations["configurations"]
+	end
 	launch_cache = create_cache(Launches, "name")
 	return Launches
 end
 
 -- Function to replace variables and execute callback
 local function replace_and_run(command, callback, opts)
-  local inputs = get_inputs()
+	local inputs = get_inputs()
 	local input_vars, predefined_vars, missing = extract_variables(command, inputs)
-  get_inputs_and_run(input_vars, inputs, predefined_vars, missing, command, callback, opts)
+	get_inputs_and_run(input_vars, inputs, predefined_vars, missing, command, callback, opts)
 end
 
 return {
@@ -655,4 +662,5 @@ return {
 	Set_buffer_options = set_buffer_options,
 	Set_default_tasks = set_default_tasks,
 	buffer_options = buffer_options,
+	ignore_input_default = set_ignore_input_default,
 }

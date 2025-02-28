@@ -36,6 +36,9 @@ local function config(opts)
 	if opts.default_tasks ~= nil then
 		M.Parse.Set_default_tasks(opts.default_tasks)
 	end
+	if opts.ignore_input_default ~= nil and opts.ignore_input_default == true then
+		M.Parse.ignore_input_default()
+	end
 end
 
 M.config = function(opts)
