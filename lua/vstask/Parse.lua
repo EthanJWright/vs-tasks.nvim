@@ -3,14 +3,19 @@ local Config = require("vstask.Config")
 local Predefined = require("vstask.Predefined")
 
 local cache_json_conf = true
+Ignore_input_default = false
+
+local function set_ignore_input_default()
+	Ignore_input_default = true
+end
 
 local function set_cache_json_conf(value)
 	cache_json_conf = value
 end
 
 local function clear_inputs()
-  Inputs = {}
-  vim.notify("Inputs cleared", vim.log.levels.INFO)
+	Inputs = {}
+	vim.notify("Inputs cleared", vim.log.levels.INFO)
 end
 
 local auto_detect = {
@@ -18,52 +23,55 @@ local auto_detect = {
 }
 
 local function should_handle_pick_string(input_config)
-  return input_config and input_config.type == "command" and input_config.command == "extension.commandvariable.pickStringRemember"
+	return input_config
+		and input_config.type == "command"
+		and input_config.command == "extension.commandvariable.pickStringRemember"
 end
 
-
 local function handle_pick_string_remember(input, input_config, opts, callback)
-    local pickers = require("telescope.pickers")
-    local finders = require("telescope.finders")
-    local conf = require("telescope.config").values
-    local actions = require("telescope.actions")
-    local action_state = require("telescope.actions.state")
+	local pickers = require("telescope.pickers")
+	local finders = require("telescope.finders")
+	local conf = require("telescope.config").values
+	local actions = require("telescope.actions")
+	local action_state = require("telescope.actions.state")
 
-    -- Extract options from args
-    local options = input_config.args.options or {}
-    local description = input_config.args.description or "Select an option:"
+	-- Extract options from args
+	local options = input_config.args.options or {}
+	local description = input_config.args.description or "Select an option:"
 
-    pickers.new(opts, {
-        prompt_title = description,
-        finder = finders.new_table {
-            results = options,
-            entry_maker = function(entry)
-                return {
-                    value = entry[2],
-                    display = entry[1],
-                    ordinal = entry[1],
-                }
-            end,
-        },
-        sorter = conf.generic_sorter({}),
-        attach_mappings = function(prompt_bufnr, _)
-            actions.select_default:replace(function()
-                actions.close(prompt_bufnr)
-                local selection = action_state.get_selected_entry()
-                if selection then
-                    if Inputs[input] == nil then
-                        Inputs[input] = {}
-                    end
-                    Inputs[input].value = selection.value
-                    Inputs[input].id = input
-                    if callback ~= nil then
-                      callback()
-                    end
-                end
-            end)
-            return true
-        end,
-    }):find()
+	pickers
+		.new(opts, {
+			prompt_title = description,
+			finder = finders.new_table({
+				results = options,
+				entry_maker = function(entry)
+					return {
+						value = entry[2],
+						display = entry[1],
+						ordinal = entry[1],
+					}
+				end,
+			}),
+			sorter = conf.generic_sorter({}),
+			attach_mappings = function(prompt_bufnr, _)
+				actions.select_default:replace(function()
+					actions.close(prompt_bufnr)
+					local selection = action_state.get_selected_entry()
+					if selection then
+						if Inputs[input] == nil then
+							Inputs[input] = {}
+						end
+						Inputs[input].value = selection.value
+						Inputs[input].id = input
+						if callback ~= nil then
+							callback()
+						end
+					end
+				end)
+				return true
+			end,
+		})
+		:find()
 end
 
 local config_dir = ".vscode"
@@ -138,6 +146,9 @@ local function get_inputs()
 		Inputs[input_id] = input_dict
 		-- Set value to default if provided, otherwise empty string
 		Inputs[input_id]["value"] = input_dict["default"] or ""
+		if Ignore_input_default then
+			Inputs[input_id]["value"] = ""
+		end
 
 		::continue::
 	end
@@ -322,43 +333,42 @@ local function get_input_variables(command)
 end
 
 local function handle_standard_input(input, callback)
-    -- Handle regular input types
-    local input_val = vim.fn.input(input .. "=", "")
-    if input_val == "clear" then
-        Inputs[input]["value"] = nil
-    else
-        if Inputs[input] == nil then
-            Inputs[input] = { "value", nil }
-        end
-        Inputs[input]["value"] = input_val
-        Inputs[input]["id"] = input
-        if callback ~= nil then
-          callback()
-        end
-    end
+	-- Handle regular input types
+	local input_val = vim.fn.input(input .. "=", "")
+	if input_val == "clear" then
+		Inputs[input]["value"] = nil
+	else
+		if Inputs[input] == nil then
+			Inputs[input] = { "value", nil }
+		end
+		Inputs[input]["value"] = input_val
+		Inputs[input]["id"] = input
+		if callback ~= nil then
+			callback()
+		end
+	end
 end
 
 local get_input_config = function(input)
-    local input_config = nil
-    for _, cfg in pairs(Inputs) do
-        if cfg.id == input then
-            input_config = cfg
-            break
-        end
-    end
-  return input_config
+	local input_config = nil
+	for _, cfg in pairs(Inputs) do
+		if cfg.id == input then
+			input_config = cfg
+			break
+		end
+	end
+	return input_config
 end
 
-
 local function load_input_variable(input, opts)
-  local input_config = get_input_config(input)
+	local input_config = get_input_config(input)
 
-  if should_handle_pick_string(input_config) then
-      handle_pick_string_remember(input, input_config, opts)
-      return
-  end
+	if should_handle_pick_string(input_config) then
+		handle_pick_string_remember(input, input_config, opts)
+		return
+	end
 
-  handle_standard_input(input)
+	handle_standard_input(input)
 end
 
 local function get_predefined_variables(command)
@@ -391,7 +401,7 @@ local find_missing_inputs = function(inputs, input_vars)
 			table.insert(missing, input_var)
 		end
 	end
-  return missing
+	return missing
 end
 
 local function replace_input_vars(input_vars, inputs, command)
@@ -400,77 +410,75 @@ local function replace_input_vars(input_vars, inputs, command)
 		local replace = get_input_variable(replacing, inputs)
 		command = string.gsub(command, replace_pattern, replace)
 	end
-  return command
+	return command
 end
 
 local function replace_predefined_vars(predefined_vars, command)
-  for _, replacing in pairs(predefined_vars) do
-    local func = get_predefined_function(replacing, Predefined)
-    if func ~= nil then
-      local replace_pattern = "${" .. replacing .. "}"
-      command = string.gsub(command, replace_pattern, func())
-    end
-  end
-  return command
+	for _, replacing in pairs(predefined_vars) do
+		local func = get_predefined_function(replacing, Predefined)
+		if func ~= nil then
+			local replace_pattern = "${" .. replacing .. "}"
+			command = string.gsub(command, replace_pattern, func())
+		end
+	end
+	return command
 end
 
 local function command_replacements(input_vars, inputs, predefined_vars, command)
-  command = replace_input_vars(input_vars, inputs, command)
-  command = replace_predefined_vars(predefined_vars, command)
-  return command
+	command = replace_input_vars(input_vars, inputs, command)
+	command = replace_predefined_vars(predefined_vars, command)
+	return command
 end
 
 local get_inputs_and_run = function(input_vars, inputs, predefined_vars, missing, raw_command, callback, opts)
-  local missing_length = #missing
-  local fetched_missing = false
+	local missing_length = #missing
+	local fetched_missing = false
 
-  for index, input in pairs(missing) do
-    local input_config = get_input_config(input)
-    local run_callback = function()
-      if missing_length == index then
-        local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
-        fetched_missing = true
-        callback(command)
-      end
-    end
-    if should_handle_pick_string(input_config) then
-        handle_pick_string_remember(input, input_config, opts, run_callback)
-        return
-    end
-    handle_standard_input(input, run_callback)
-  end
-  if fetched_missing == false then
-    local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
-    callback(command)
-  end
+	for index, input in pairs(missing) do
+		local input_config = get_input_config(input)
+		local run_callback = function()
+			if missing_length == index then
+				local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
+				fetched_missing = true
+				callback(command)
+			end
+		end
+		if should_handle_pick_string(input_config) then
+			handle_pick_string_remember(input, input_config, opts, run_callback)
+			return
+		end
+		handle_standard_input(input, run_callback)
+	end
+	if fetched_missing == false then
+		local command = command_replacements(input_vars, inputs, predefined_vars, raw_command)
+		callback(command)
+	end
 end
 
 local get_missing_inputs_from_user = function(missing)
-  for _, input in pairs(missing) do
-    load_input_variable(input)
-  end
+	for _, input in pairs(missing) do
+		load_input_variable(input)
+	end
 end
 
 local get_existing_variables = function(command)
 	local input_vars = get_input_variables(command)
 	local predefined_vars = get_predefined_variables(command)
-  return input_vars, predefined_vars
+	return input_vars, predefined_vars
 end
 
 local extract_variables = function(command, inputs)
-  local input_vars, predefined_vars = get_existing_variables(command)
-  local missing = find_missing_inputs(inputs, input_vars)
-  -- this gets user input
+	local input_vars, predefined_vars = get_existing_variables(command)
+	local missing = find_missing_inputs(inputs, input_vars)
+	-- this gets user input
 	return input_vars, predefined_vars, missing
 end
-
-
 
 local function replace_vars_in_command(command)
 	local inputs = get_inputs()
 	local input_vars, predefined_vars, missing = extract_variables(command, inputs)
-  get_missing_inputs_from_user(missing)
-  command = command_replacements(input_vars, inputs, predefined_vars, command)
+	get_missing_inputs_from_user(missing)
+	command = command_replacements(input_vars, inputs, predefined_vars, command)
 	return command
 end
 
@@ -488,24 +496,24 @@ local function get_launches()
 	end
 	local path = vim.fn.getcwd() .. "/" .. config_dir .. "/launch.json"
 	if not file_exists(path) then
-		vim.notify(MISSING_FILE_MESSAGE,  vim.log.levels.ERROR)
+		vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
 		return {}
 	end
 	get_inputs()
 	local configurations = Config.load_json(path, JSON_PARSER)
 
-  if configurations ~= nil then
-    Launches = configurations["configurations"]
-  end
+	if configurations ~= nil then
+		Launches = configurations["configurations"]
+	end
 	launch_cache = create_cache(Launches, "name")
 	return Launches
 end
 
 -- Function to replace variables and execute callback
 local function replace_and_run(command, callback, opts)
-  local inputs = get_inputs()
+	local inputs = get_inputs()
 	local input_vars, predefined_vars, missing = extract_variables(command, inputs)
-  get_inputs_and_run(input_vars, inputs, predefined_vars, missing, command, callback, opts)
+	get_inputs_and_run(input_vars, inputs, predefined_vars, missing, command, callback, opts)
 end
 
 return {
@@ -523,5 +531,6 @@ return {
 	Set_cache_json_conf = set_cache_json_conf,
 	Set_config_dir = set_config_dir,
 	Set_json_parser = set_json_parser,
-  Clear_inputs = clear_inputs,
+	Clear_inputs = clear_inputs,
+	ignore_input_default = set_ignore_input_default,
 }

@@ -197,7 +197,8 @@ require("vstask").setup({
       direction = 'tab',
     }
   },
-  json_parser = vim.json.decode
+  json_parser = vim.json.decode,
+  ignore_input_default = false -- always ignore an input default if `true`
 })
 EOF
 ```

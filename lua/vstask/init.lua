@@ -33,6 +33,9 @@ local function config(opts)
 	if opts.json_parser ~= nil then
 		M.Parse.Set_json_parser(opts.json_parser)
 	end
+	if opts.ignore_input_default ~= nil and opts.ignore_input_default == true then
+		M.Parse.ignore_input_default()
+	end
 end
 
 M.config = function(opts)
