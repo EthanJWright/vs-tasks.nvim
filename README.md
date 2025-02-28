@@ -16,7 +16,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 - Use VS Code's [variables](https://code.visualstudio.com/docs/editor/variables-reference) in the command (limited support, see desired features)
 - Use VS Code's [launch.json](https://code.visualstudio.com/docs/editor/debugging#_launch-configurations) pattern (limited support)
 - ⟳ Run tasks from your history, sorted by most used
-- 🐚 run shell commands with .run() or <C-r>
+- 🐚 run shell commands with .run() or `<C-r>`
 - basic support for option picker for task input (similar to extension.commandvariable.pickStringRemember)
 - dependsOn and dependsOrder support, utilizing the background jobs feature. View with Jobs picker
 - add default tasks in setup for projects without .vscode/tasks.json, or of you want to add your own
