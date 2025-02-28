@@ -290,7 +290,7 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 			command = prepared_command,
 			silent = false,
 			watch = direction == "watch_job",
-			terminal = direction ~= "background_job",
+			terminal = direction ~= "background_job" and direction ~= "watch_job",
 			direction = direction,
 			on_complete = function()
 				refresh_picker()
@@ -447,7 +447,7 @@ local function restart_watched_jobs()
 			-- Use timer to ensure job is fully stopped before restarting
 			if not Job.is_running(job_id) then
 				-- Remove from background_jobs to prevent duplicate entries
-				Job.set_background_jobs(job_id, nil)
+				Job.set_background_job(job_id, nil)
 
 				-- Remove from live_output_buffers if present
 				Job.remove_live_output_buffer(job_id)

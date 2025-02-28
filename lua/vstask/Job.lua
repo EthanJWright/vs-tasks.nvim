@@ -295,6 +295,9 @@ M.start_job = function(opts)
 			if exit_code == 0 then
 				notify("🟢 Job completed successfully : " .. job.label, vim.log.levels.INFO)
 				quickfix.close()
+			elseif job.watch == true then
+				local content = M.get_buffer_content(job_id)
+				quickfix.toquickfix(content)
 			else
 				notify("🔴 Job failed." .. job.label, vim.log.levels.ERROR)
 				local content = M.get_buffer_content(job_id)
