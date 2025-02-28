@@ -70,9 +70,10 @@ Set up keybindings:
 nnoremap <Leader>ta :lua require("telescope").extensions.vstask.tasks()<CR>
 nnoremap <Leader>ti :lua require("telescope").extensions.vstask.inputs()<CR>
 nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
-nnoremap <Leader>tc :lua require("telescope").extensions.vstask.clear_inputs()<CR>
-nnoremap <Leader>th :lua require("telescope").extensions.vstask.history()<CR>
+nnoremap <Leader>td :lua require("telescope").extensions.vstask.clear_inputs()<CR>
+nnoremap <Leader>tc :lua require("telescope").extensions.vstask.cleanup_completed_jobs()<CR>
 nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
+nnoremap <Leader>tl :lua require('telescope').extensions.vstask.command()<cr>
 ```
 
 ## Functions
@@ -81,7 +82,8 @@ nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
 
 `:Telescope vstask tasks`
 
-- Opens task picker showing all available tasks from `.vscode/tasks.json` and `package.json` scripts
+- Opens task picker showing all available tasks from `.vscode/tasks.json`
+- Also can load language specific of `default_tasks` based on config
 - Key mappings:
   - `<CR>` - Run in current window
   - `<C-v>` - Run in vertical split
@@ -103,11 +105,6 @@ nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
   - promptString (text input)
   - pickString (selection from list)
 
-`:Telescope vstask history`
-
-- Shows previously run tasks, sorted by usage frequency
-- Supports same key mappings as tasks
-
 `:Telescope vstask launch`
 
 - Opens launch configuration picker from `.vscode/launch.json`
@@ -116,6 +113,7 @@ nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
   - `<C-v>` - Run in vertical split
   - `<C-p>` - Run in horizontal split
   - `<C-t>` - Run in new tab
+  - `<C-b>` - Run in background terminal (hidden from buffers)
 
 ### Job Management
 
@@ -127,7 +125,7 @@ nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
   - `<C-v>` - View output in vertical split
   - `<C-p>` - View output in horizontal split
   - `<C-w>` - Toggle watch mode (restart on save)
-  - `<C-d>` - Kill task/Remove from history
+  - `<C-d>` - Kill task and remove from job list
 - Features:
   - Live output preview
   - Watch mode for auto-restart
@@ -143,6 +141,10 @@ nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
 `:Telescope vstask clear_inputs`
 
 - Clears all stored input variable values for current session
+
+`:Telescope vstask cleanup_completed_jobs`
+
+- Removes all completed jobs from the job list
 
 ### Autodetect
 
