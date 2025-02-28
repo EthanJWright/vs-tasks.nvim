@@ -415,6 +415,18 @@ end
 
 M.toggle_watch = function(job_id)
 	background_jobs[job_id].watch = not background_jobs[job_id].watch
+	local job = M.get_background_job(job_id)
+	if job.watch then
+		M.fully_clear_job(job)
+		M.start_job({
+			label = job.label,
+			command = job.command,
+			silent = false,
+			watch = true,
+			terminal = false,
+			direction = "background_job",
+		})
+	end
 end
 
 M.preview_job_output = function(output, bufnr)

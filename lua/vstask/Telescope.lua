@@ -548,7 +548,9 @@ local function jobs_picker(opts)
 			local toggle_watch_binding = function()
 				local selection = state.get_selected_entry()
 				local job = jobs_list[selection.index]
+				actions.close(prompt_bufnr)
 				Job.toggle_watch(job.id)
+				jobs_picker(opts)
 			end
 
 			local open_job = function()
