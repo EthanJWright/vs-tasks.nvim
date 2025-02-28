@@ -59,6 +59,37 @@ local function format_jobs_list(jobs_list)
 	return jobs_formatted
 end
 
+local job_previewer = function(self, entry, jobs_list)
+	local job = jobs_list[entry.index]
+	if not job then
+		return
+	end
+
+	if Job.is_job_running(job.id) then
+		-- For running jobs
+		local preview_key = Job.get_preview_key(self.state.bufnr, job.id)
+		if not Job.is_preview_configured(preview_key) then
+			Job.configure_preview(preview_key, job.id, self.state.bufnr)
+		else
+			-- Subsequent updates
+			local output = Job.get_buffer_content(job.id)
+			if output and #output > 0 then
+				Job.preview_job_output(output, self.state.bufnr)
+			else
+			end
+		end
+	else
+		-- For completed jobs, use stored output
+		local background_job = Job.get_background_job(job.id)
+		local output = background_job.output or {}
+		if type(output) == "string" then
+			output = vim.split(output, "\n")
+		end
+		vim.bo[self.state.bufnr].filetype = "sh"
+		Job.preview_job_output(output, self.state.bufnr)
+	end
+end
+
 local refresh_picker = function()
 	local jobs_list = Job.build_jobs_list()
 	local jobs_formatted = format_jobs_list(jobs_list)
@@ -496,34 +527,7 @@ local function jobs_picker(opts)
 		previewer = previewers.new_buffer_previewer({
 			title = "Jobs",
 			define_preview = function(self, entry)
-				local job = jobs_list[entry.index]
-				if not job then
-					return
-				end
-
-				if Job.is_job_running(job.id) then
-					-- For running jobs
-					local preview_key = Job.get_preview_key(self.state.bufnr, job.id)
-					if not Job.is_preview_configured(preview_key) then
-						Job.configure_preview(preview_key, job.id, self.state.bufnr)
-					else
-						-- Subsequent updates
-						local output = Job.get_buffer_content(job.id)
-						if output and #output > 0 then
-							Job.preview_job_output(output, self.state.bufnr)
-						else
-						end
-					end
-				else
-					-- For completed jobs, use stored output
-					local background_job = Job.get_background_job(job.id)
-					local output = background_job.output or {}
-					if type(output) == "string" then
-						output = vim.split(output, "\n")
-					end
-					vim.bo[self.state.bufnr].filetype = "sh"
-					Job.preview_job_output(output, self.state.bufnr)
-				end
+				return job_previewer(self, entry, jobs_list)
 			end,
 		}),
 		attach_mappings = function(prompt_bufnr, map)
