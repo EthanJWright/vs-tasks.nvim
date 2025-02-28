@@ -22,6 +22,27 @@ M.remove_live_output_buffer = function(job_id)
 	live_output_buffers[job_id] = nil
 end
 
+local get_related_buffers = function(label)
+	local buffers_to_delete = {}
+	for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(buf_id) then
+			local buf_name = vim.api.nvim_buf_get_name(buf_id)
+
+			-- Extract just the task name part (after LABEL_PRE)
+			local label_start = buf_name:find(vim.pesc(M.LABEL_PRE))
+			if label_start then
+				local task_name = buf_name:sub(label_start + #M.LABEL_PRE)
+
+				-- Do exact match on the task name
+				if task_name == label then
+					table.insert(buffers_to_delete, buf_id)
+				end
+			end
+		end
+	end
+	return buffers_to_delete
+end
+
 M.split_to_direction = function(direction)
 	local opt_direction = Opts.get_direction(direction, Term_opts)
 	local size = Opts.get_size(direction, Term_opts)
@@ -632,18 +653,7 @@ M.fully_clear_job = function(job)
 	M.remove_preview(job.id)
 
 	-- Track which buffers we're going to delete
-	local buffers_to_delete = {}
-
-	-- Find all related buffers
-	for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
-		if vim.api.nvim_buf_is_valid(buf_id) then
-			local buf_name = vim.api.nvim_buf_get_name(buf_id)
-			-- Match for the buffer name including any counter suffix
-			if buf_name:match(vim.pesc(M.LABEL_PRE .. job.label)) then
-				table.insert(buffers_to_delete, buf_id)
-			end
-		end
-	end
+	local buffers_to_delete = get_related_buffers(job.label)
 
 	-- Delete all identified buffers
 	for _, buf_id in ipairs(buffers_to_delete) do
@@ -667,17 +677,7 @@ M.fully_clear_job = function(job)
 
 	-- Schedule a check to verify buffers are gone
 	vim.schedule(function()
-		local remaining_buffers = {}
-		local job_label_pattern = vim.pesc(M.LABEL_PRE .. job.label)
-
-		for _, buf_id in ipairs(vim.api.nvim_list_bufs()) do
-			if vim.api.nvim_buf_is_valid(buf_id) then
-				local buf_name = vim.api.nvim_buf_get_name(buf_id)
-				if buf_name:match(job_label_pattern) then
-					table.insert(remaining_buffers, buf_name)
-				end
-			end
-		end
+		local remaining_buffers = get_related_buffers(job.label)
 
 		if #remaining_buffers > 0 then
 			vim.notify(

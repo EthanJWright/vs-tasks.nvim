@@ -540,8 +540,10 @@ local function jobs_picker(opts)
 
 				local job = Job.get_background_job(selected_job.id)
 
+				-- Close the picker first
+				actions.close(prompt_bufnr)
 				Job.fully_clear_job(job)
-				refresh_picker()
+				jobs_picker(opts)
 			end
 			local toggle_watch_binding = function()
 				local selection = state.get_selected_entry()
