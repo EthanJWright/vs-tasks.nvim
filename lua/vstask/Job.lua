@@ -198,6 +198,14 @@ M.get_buffer_content = function(buf_job_id)
 	return {}
 end
 
+local spawn_job = function(command, on_stdout, on_stderr, on_exit)
+	return vim.fn.termopen(command, {
+		on_stdout = on_stdout,
+		on_stderr = on_stderr,
+		on_exit = on_exit,
+	})
+end
+
 M.start_job = function(opts)
 	-- Default options
 	local options = {
@@ -264,71 +272,72 @@ M.start_job = function(opts)
 	vim.schedule(function()
 		name_buffer(buf, options.label)
 	end)
-	job_id = vim.fn.jobstart(options.command, {
-		term = true,
-		pty = true,
-		on_stdout = function(_, data)
-			if data then
-				if options.on_data then
-					options.on_data(data)
-				end
-				update_buffers()
-			end
-		end,
-		on_stderr = function(_, data)
-			if data then
-				update_buffers()
-			end
-			if options.on_complete ~= nil then
-				options.on_complete()
-			end
-		end,
-		on_exit = function(_, exit_code)
-			local job = background_jobs[job_id]
 
-			if job == nil then
-				return
+	local on_stdout = function(_, data)
+		if data then
+			if options.on_data then
+				options.on_data(data)
 			end
-
 			update_buffers()
+		end
+	end
 
-			if exit_code == 0 then
-				notify("🟢 Job completed successfully : " .. job.label, vim.log.levels.INFO)
-				quickfix.close()
-			elseif job.watch == true then
-				local content = M.get_buffer_content(job_id)
-				quickfix.toquickfix(content)
-			else
-				notify("🔴 Job failed." .. job.label, vim.log.levels.ERROR)
-				local content = M.get_buffer_content(job_id)
-				quickfix.toquickfix(content)
-			end
+	local on_stderr = function(_, data)
+		if data then
+			update_buffers()
+		end
+		if options.on_complete ~= nil then
+			options.on_complete()
+		end
+	end
 
-			-- Always record end time and exit code
-			background_jobs[job_id].end_time = os.time()
-			background_jobs[job_id].exit_code = exit_code
+	local on_exit = function(_, exit_code)
+		local job = background_jobs[job_id]
 
-			-- Keep completed job in background_jobs unless it's a watch job
-			if not job.watch then
-				-- Get final output from terminal buffer
-				local content = M.get_buffer_content(job_id)
-				-- Update the job with final state
-				background_jobs[job_id] = {
-					id = job_id,
-					label = job.label,
-					end_time = os.time(),
-					start_time = job.start_time or os.time(),
-					exit_code = exit_code,
-					output = vim.deepcopy(content),
-					command = job.command,
-					completed = true, -- Mark as completed
-				}
-			end
-			if options.on_complete ~= nil then
-				options.on_complete()
-			end
-		end,
-	})
+		if job == nil then
+			return
+		end
+
+		update_buffers()
+
+		if exit_code == 0 then
+			notify("🟢 Job completed successfully : " .. job.label, vim.log.levels.INFO)
+			quickfix.close()
+		elseif job.watch == true then
+			local content = M.get_buffer_content(job_id)
+			quickfix.toquickfix(content)
+		else
+			notify("🔴 Job failed." .. job.label, vim.log.levels.ERROR)
+			local content = M.get_buffer_content(job_id)
+			quickfix.toquickfix(content)
+		end
+
+		-- Always record end time and exit code
+		background_jobs[job_id].end_time = os.time()
+		background_jobs[job_id].exit_code = exit_code
+
+		-- Keep completed job in background_jobs unless it's a watch job
+		if not job.watch then
+			-- Get final output from terminal buffer
+			local content = M.get_buffer_content(job_id)
+			-- Update the job with final state
+			background_jobs[job_id] = {
+				id = job_id,
+				label = job.label,
+				end_time = os.time(),
+				start_time = job.start_time or os.time(),
+				exit_code = exit_code,
+				output = vim.deepcopy(content),
+				command = job.command,
+				completed = true, -- Mark as completed
+			}
+		end
+		if options.on_complete ~= nil then
+			options.on_complete()
+		end
+	end
+
+	job_id = spawn_job(options.command, on_stdout, on_stderr, on_exit)
 
 	if options.terminal ~= true then
 		-- return to current buf if it's still valid
