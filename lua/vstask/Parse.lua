@@ -394,19 +394,25 @@ local function get_tasks()
 
 		for _, task in pairs(tasks["tasks"]) do
 			task.source = "tasks.json" -- Mark tasks from tasks.json
-			
+
 			-- Check if running on Windows and if a 'windows' specific configuration exists
-			if vim.fn.has('win32') == 1 and task.windows then
+			if vim.fn.has("win32") == 1 and task.windows then
 				-- Iterate over the properties defined in the 'windows' block
 				-- and override the top-level task properties
 				for win_key, win_value in pairs(task.windows) do
 					-- Only override if the key is actually one we'd expect in a task
-					if task[win_key] ~= nil or win_key == 'command' or win_key == 'args' or win_key == 'options' or win_key == 'cwd' then
+					if
+						task[win_key] ~= nil
+						or win_key == "command"
+						or win_key == "args"
+						or win_key == "options"
+						or win_key == "cwd"
+					then
 						task[win_key] = win_value
 					end
 				end
 			end
-			
+
 			table.insert(task_list, task)
 		end
 		::continue::
