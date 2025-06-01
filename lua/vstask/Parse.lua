@@ -143,8 +143,7 @@ local function handle_pick_string_remember(input, input_config, opts, callback)
 		:find()
 end
 
----@alias config_type string
----| "TASKS" | "LAUNCH" | "INPUTS"
+---@alias config_type integer
 local config_type = {
 	TASKS = 1,
 	LAUNCH = 2,
@@ -156,7 +155,7 @@ local config_type = {
 ---@param extension string
 ---@return string | nil
 local function get_file_with_ext(directory, extension)
-	local dir = vim.loop.fs_opendir(directory)
+	local dir = vim.fs.fs_opendir(directory)
 	if not dir then
 		return nil
 	end
@@ -164,11 +163,11 @@ local function get_file_with_ext(directory, extension)
 	-- support both ".filetype" and "filetype"
 	extension = extension:gsub("^%.", "")
 
-	local handle = vim.loop.fs_scandir(directory)
+	local handle = vim.uv.fs_scandir(directory)
 	local name, typ
 
 	while handle do
-		name, typ = vim.loop.fs_scandir_next(handle)
+		name, typ = vim.uv.fs_scandir_next(handle)
 		if not name then
 			break
 		end
@@ -182,15 +181,8 @@ local function get_file_with_ext(directory, extension)
 	return nil
 end
 
----Checks to see if a file with the .code-workspace extension exists.
----@return boolean
-local function code_workspace_exists()
-	local cwd = vim.fn.getcwd()
-	return get_file_with_ext(cwd, ".code-workspace") ~= nil
-end
-
----Gets code-workspace file from cwd
----@return string
+---Gets code-workspace file from cwd, if it exists
+---@return string | nil
 local function get_code_workspace()
 	local cwd = vim.fn.getcwd()
 	return get_file_with_ext(cwd, ".code-workspace")
@@ -239,42 +231,6 @@ end
 
 local function setContains(set, key)
 	return set[key] ~= nil
-end
-
-local function get_inputs()
-	if Inputs ~= nil and next(Inputs) ~= nil then
-		return Inputs
-	end
-	local path = vim.fn.getcwd() .. "/" .. config_dir .. "/tasks.json"
-	if not file_exists(path) then
-		vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
-		return {}
-	end
-	local config = Config.load_json(path, JSON_PARSER)
-	if config == nil or config["inputs"] == nil then
-		Inputs = {}
-		return Inputs
-	end
-
-	local inputs = config["inputs"]
-	for _, input_dict in pairs(inputs) do
-		local input_id = input_dict["id"]
-		-- Skip if input already exists
-		if Inputs[input_id] ~= nil then
-			goto continue
-		end
-
-		-- Create new input entry
-		Inputs[input_id] = input_dict
-		-- Set value to default if provided, otherwise empty string
-		Inputs[input_id]["value"] = input_dict["default"] or ""
-		if Ignore_input_default then
-			Inputs[input_id]["value"] = ""
-		end
-
-		::continue::
-	end
-	return Inputs
 end
 
 local task_cache = nil
@@ -397,30 +353,77 @@ local function auto_detect_npm()
 	return script_tasks
 end
 
-local function tasks_file_exists()
-	local cwd = vim.fn.getcwd()
-	local path = cwd .. "/" .. config_dir .. "/tasks.json"
-	return file_exists(path)
-end
-
----Abstracts the check for a specific VS Code config to support
+---Attempts to get a particular part of a VS Code config
 ---.vscode/{file}.json and .code-workspace files.
 ---@param configtype config_type
----@return boolean
-local function vscode_file_exists(configtype)
-	-- Prefer .code-workspace over .vscode folders
-	-- Return if the given type exists
+---@return table | nil
+local function get_vscode_config(configtype)
+	---Quick local function that handles falling back to the vscode folder
+	---if the path is nil
+	---@return table | nil
+	local function get_key_from_vsc_file(key, path)
+		local cwd = vim.fn.getcwd()
+		local vscode_folder = vim.fs.joinpath(cwd, config_dir)
+		if not path then
+			path = vim.fs.joinpath(vscode_folder, key .. ".json")
+		end
+
+		if not file_exists(path) then
+			return nil
+		end
+		local loaded_config = Config.load_json(path, JSON_PARSER)
+		if not loaded_config then
+			return nil
+		end
+		local _, result = pcall(function()
+			local value = loaded_config[key]
+			return value
+		end)
+		return result
+	end
+
+	local code_workspace = get_code_workspace()
+	if configtype == config_type.TASKS then
+		return get_key_from_vsc_file("tasks", code_workspace)
+	elseif configtype == config_type.LAUNCH then
+		return get_key_from_vsc_file("launch", code_workspace)
+	elseif configtype == config_type.INPUTS then
+		return get_key_from_vsc_file("inputs", code_workspace)
+	end
+
+	return nil
 end
 
----Abstracts getting specific data from the VS Code config to support
----.vscode/{file}.json and .code-workspace files.
----@param configtype config_type
----@return string
-local function get_vscode_file(configtype)
-	-- Prefer .code-workspace over .vscode folders
-	-- Return the correct filepath given configtype
-end
+local function get_inputs()
+	if Inputs ~= nil and next(Inputs) ~= nil then
+		return Inputs
+	end
+	local inputs = get_vscode_config(config_type.INPUTS)
 
+	if not inputs then
+		vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
+		return {}
+	end
+
+	for _, input_dict in pairs(inputs) do
+		local input_id = input_dict["id"]
+		-- Skip if input already exists
+		if Inputs[input_id] ~= nil then
+			goto continue
+		end
+
+		-- Create new input entry
+		Inputs[input_id] = input_dict
+		-- Set value to default if provided, otherwise empty string
+		Inputs[input_id]["value"] = input_dict["default"] or ""
+		if Ignore_input_default then
+			Inputs[input_id]["value"] = ""
+		end
+
+		::continue::
+	end
+	return Inputs
+end
 local function notify_missing_task_file()
 	vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
 end
@@ -451,20 +454,13 @@ local function get_tasks()
 		return task_list
 	end
 
-	local cwd = vim.fn.getcwd()
-	local path = cwd .. "/" .. config_dir .. "/tasks.json"
-
 	get_inputs()
 
 	-- add vscode tasks configuration
-	if tasks_file_exists() == true then
-		local tasks = Config.load_json(path, JSON_PARSER)
-		if tasks == nil then
-			goto continue
-		end
-
-		for _, task in pairs(tasks["tasks"]) do
-			task.source = "tasks.json" -- Mark tasks from tasks.json
+	local tasks = get_vscode_config(config_type.TASKS)
+	if tasks then
+		for _, task in pairs(tasks) do
+			task.source = "vscode_config" -- Mark tasks from vscode
 
 			-- Check if running on Windows and if a 'windows' specific configuration exists
 			if vim.fn.has("win32") == 1 and task.windows then
@@ -711,17 +707,13 @@ local function get_launches()
 	if launch_cache ~= nil then
 		return manage_cache(launch_cache, CACHE_STRATEGY)
 	end
-	local path = vim.fn.getcwd() .. "/" .. config_dir .. "/launch.json"
-	if not file_exists(path) then
+	local configurations = get_vscode_config(config_type.LAUNCH)
+	if not configurations then
 		vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
 		return {}
 	end
 	get_inputs()
-	local configurations = Config.load_json(path, JSON_PARSER)
-
-	if configurations ~= nil then
-		Launches = configurations["configurations"]
-	end
+	Launches = configurations["configurations"]
 	launch_cache = create_cache(Launches, "name")
 	return Launches
 end
