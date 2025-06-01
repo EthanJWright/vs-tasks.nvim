@@ -143,19 +143,21 @@ local function handle_pick_string_remember(input, input_config, opts, callback)
 		:find()
 end
 
----@alias config_type integer
+---@alias config_type string
 local config_type = {
-	TASKS = 1,
-	LAUNCH = 2,
-	INPUTS = 3,
+	TASKS = "tasks",
+	LAUNCH = "launch",
+	INPUTS = "inputs",
 }
+
+local vsc_ws_suffix = ".code-workspace"
 
 ---Attempts to get the first file with a given extension in the directory
 ---@param directory string
 ---@param extension string
 ---@return string | nil
 local function get_file_with_ext(directory, extension)
-	local dir = vim.fs.fs_opendir(directory)
+	local dir = vim.uv.fs_opendir(directory)
 	if not dir then
 		return nil
 	end
@@ -185,7 +187,17 @@ end
 ---@return string | nil
 local function get_code_workspace()
 	local cwd = vim.fn.getcwd()
-	return get_file_with_ext(cwd, ".code-workspace")
+	return get_file_with_ext(cwd, vsc_ws_suffix)
+end
+
+---@param configtype config_type
+---@param level vim.log.levels? defaults to WARN
+local function notify_missing_vs_config(configtype, level)
+	if not level then
+		level = vim.log.levels.WARN
+	end
+	local missing_config_message = 'VS Code "' .. configtype .. '" configuration could not be found.'
+	vim.notify(missing_config_message, level)
 end
 
 local config_dir = ".vscode"
@@ -204,8 +216,6 @@ local function set_autodetect(autodetect)
 		auto_detect.npm = autodetect.npm
 	end
 end
-
-local MISSING_FILE_MESSAGE = 'VS Code "tasks" configuration could not be found.'
 
 local CACHE_STRATEGY = nil
 local set_cache_strategy = function(strategy)
@@ -365,7 +375,12 @@ local function get_vscode_config(configtype)
 		local cwd = vim.fn.getcwd()
 		local vscode_folder = vim.fs.joinpath(cwd, config_dir)
 		if not path then
-			path = vim.fs.joinpath(vscode_folder, key .. ".json")
+			-- Tiny override due to "inputs" being in the "tasks.json" file
+			if key == config_type.INPUTS then
+				path = vim.fs.joinpath(vscode_folder, config_type.TASKS .. ".json")
+			else
+				path = vim.fs.joinpath(vscode_folder, key .. ".json")
+			end
 		end
 
 		if not file_exists(path) then
@@ -376,6 +391,11 @@ local function get_vscode_config(configtype)
 			return nil
 		end
 		local _, result = pcall(function()
+			local is_code_workspace = path:sub(-#vsc_ws_suffix) == vsc_ws_suffix
+			if is_code_workspace and (key == config_type.TASKS or key == config_type.INPUTS) then
+				loaded_config = loaded_config[config_type.TASKS]
+			end
+
 			local value = loaded_config[key]
 			return value
 		end)
@@ -383,15 +403,7 @@ local function get_vscode_config(configtype)
 	end
 
 	local code_workspace = get_code_workspace()
-	if configtype == config_type.TASKS then
-		return get_key_from_vsc_file("tasks", code_workspace)
-	elseif configtype == config_type.LAUNCH then
-		return get_key_from_vsc_file("launch", code_workspace)
-	elseif configtype == config_type.INPUTS then
-		return get_key_from_vsc_file("inputs", code_workspace)
-	end
-
-	return nil
+	return get_key_from_vsc_file(configtype, code_workspace)
 end
 
 local function get_inputs()
@@ -401,7 +413,7 @@ local function get_inputs()
 	local inputs = get_vscode_config(config_type.INPUTS)
 
 	if not inputs then
-		vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
+		notify_missing_vs_config(config_type.INPUTS)
 		return {}
 	end
 
@@ -423,9 +435,6 @@ local function get_inputs()
 		::continue::
 	end
 	return Inputs
-end
-local function notify_missing_task_file()
-	vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
 end
 
 local function get_tasks()
@@ -504,7 +513,7 @@ local function get_tasks()
 	task_cache = create_cache(task_list, "label")
 
 	if task_list == nil or #task_list == 0 then
-		notify_missing_task_file()
+		notify_missing_vs_config(config_type.TASKS, vim.log.levels.ERROR)
 	end
 
 	return task_list
@@ -709,7 +718,7 @@ local function get_launches()
 	end
 	local configurations = get_vscode_config(config_type.LAUNCH)
 	if not configurations then
-		vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
+		notify_missing_vs_config(config_type.LAUNCH)
 		return {}
 	end
 	get_inputs()
