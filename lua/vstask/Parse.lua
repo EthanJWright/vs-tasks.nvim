@@ -143,6 +143,59 @@ local function handle_pick_string_remember(input, input_config, opts, callback)
 		:find()
 end
 
+---@alias config_type string
+---| "TASKS" | "LAUNCH" | "INPUTS"
+local config_type = {
+	TASKS = 1,
+	LAUNCH = 2,
+	INPUTS = 3,
+}
+
+---Attempts to get the first file with a given extension in the directory
+---@param directory string
+---@param extension string
+---@return string | nil
+local function get_file_with_ext(directory, extension)
+	local dir = vim.loop.fs_opendir(directory)
+	if not dir then
+		return nil
+	end
+
+	-- support both ".filetype" and "filetype"
+	extension = extension:gsub("^%.", "")
+
+	local handle = vim.loop.fs_scandir(directory)
+	local name, typ
+
+	while handle do
+		name, typ = vim.loop.fs_scandir_next(handle)
+		if not name then
+			break
+		end
+		if typ == "file" then
+			local ext = vim.fn.fnamemodify(name, ":e")
+			if ext == extension then
+				return vim.fs.joinpath(directory, name)
+			end
+		end
+	end
+	return nil
+end
+
+---Checks to see if a file with the .code-workspace extension exists.
+---@return boolean
+local function code_workspace_exists()
+	local cwd = vim.fn.getcwd()
+	return get_file_with_ext(cwd, ".code-workspace") ~= nil
+end
+
+---Gets code-workspace file from cwd
+---@return string
+local function get_code_workspace()
+	local cwd = vim.fn.getcwd()
+	return get_file_with_ext(cwd, ".code-workspace")
+end
+
 local config_dir = ".vscode"
 
 local function set_config_dir(dirname)
@@ -160,7 +213,7 @@ local function set_autodetect(autodetect)
 	end
 end
 
-local MISSING_FILE_MESSAGE = "tasks.json file could not be found."
+local MISSING_FILE_MESSAGE = 'VS Code "tasks" configuration could not be found.'
 
 local CACHE_STRATEGY = nil
 local set_cache_strategy = function(strategy)
@@ -350,6 +403,24 @@ local function tasks_file_exists()
 	return file_exists(path)
 end
 
+---Abstracts the check for a specific VS Code config to support
+---.vscode/{file}.json and .code-workspace files.
+---@param configtype config_type
+---@return boolean
+local function vscode_file_exists(configtype)
+	-- Prefer .code-workspace over .vscode folders
+	-- Return if the given type exists
+end
+
+---Abstracts getting specific data from the VS Code config to support
+---.vscode/{file}.json and .code-workspace files.
+---@param configtype config_type
+---@return string
+local function get_vscode_file(configtype)
+	-- Prefer .code-workspace over .vscode folders
+	-- Return the correct filepath given configtype
+end
+
 local function notify_missing_task_file()
 	vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
 end
@@ -385,7 +456,7 @@ local function get_tasks()
 
 	get_inputs()
 
-	-- add vscode/tasks.json
+	-- add vscode tasks configuration
 	if tasks_file_exists() == true then
 		local tasks = Config.load_json(path, JSON_PARSER)
 		if tasks == nil then
