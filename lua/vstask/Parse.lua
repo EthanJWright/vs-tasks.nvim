@@ -551,9 +551,11 @@ end
 local function get_input_variables(command)
 	local input_variables = {}
 	local count = 0
-	for w in string.gmatch(command, "${input:([^}]*)}") do
-		table.insert(input_variables, w)
-		count = count + 1
+	if command then
+		for w in string.gmatch(command, "${input:([^}]*)}") do
+			table.insert(input_variables, w)
+			count = count + 1
+		end
 	end
 	return input_variables, count
 end
