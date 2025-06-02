@@ -602,13 +602,16 @@ end
 local function get_predefined_variables(command)
 	local predefined_vars = {}
 	local count = 0
-	for defined_var, _ in pairs(Predefined) do
-		local match_pattern = "${" .. defined_var .. "}"
-		for w in string.gmatch(command, match_pattern) do
-			if w ~= nil then
-				for word in string.gmatch(command, "%{(%a+)}") do
-					table.insert(predefined_vars, word)
-					count = count + 1
+
+	if command then
+		for defined_var, _ in pairs(Predefined) do
+			local match_pattern = "${" .. defined_var .. "}"
+			for w in string.gmatch(command, match_pattern) do
+				if w ~= nil then
+					for word in string.gmatch(command, "%{(%a+)}") do
+						table.insert(predefined_vars, word)
+						count = count + 1
+					end
 				end
 			end
 		end
