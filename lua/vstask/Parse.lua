@@ -369,20 +369,24 @@ local function auto_detect_npm()
 	return script_tasks
 end
 
----Quick function that handles falling back to
----the vscode folder if the provided path is nil
----@param key string
----@param path string?
+---Attempts to get a particular part of a VS Code config
+---.vscode/{file}.json and .code-workspace files.
+---@param type config_type
 ---@return table | nil
-local function get_key_from_vsc_file(key, path)
+local function get_vscode_config(type)
+	local path = nil
+	if support_vsc_workspace then
+		path = get_code_workspace()
+	end
+
 	local cwd = vim.fn.getcwd()
 	local vscode_folder = vim.fs.joinpath(cwd, config_dir)
 	if not path then
 		-- Tiny override due to "inputs" being in the "tasks.json" file
-		if key == config_type.INPUTS then
+		if type == config_type.INPUTS then
 			path = vim.fs.joinpath(vscode_folder, config_type.TASKS .. ".json")
 		else
-			path = vim.fs.joinpath(vscode_folder, key .. ".json")
+			path = vim.fs.joinpath(vscode_folder, type .. ".json")
 		end
 	end
 
@@ -396,27 +400,15 @@ local function get_key_from_vsc_file(key, path)
 	local _, result = pcall(function()
 		if support_vsc_workspace then
 			local is_code_workspace = path:sub(-#vsc_ws_suffix) == vsc_ws_suffix
-			if is_code_workspace and (key == config_type.TASKS or key == config_type.INPUTS) then
+			if is_code_workspace and (type == config_type.TASKS or type == config_type.INPUTS) then
 				loaded_config = loaded_config[config_type.TASKS]
 			end
 		end
 
-		local value = loaded_config[key]
+		local value = loaded_config[type]
 		return value
 	end)
 	return result
-end
-
----Attempts to get a particular part of a VS Code config
----.vscode/{file}.json and .code-workspace files.
----@param configtype config_type
----@return table | nil
-local function get_vscode_config(configtype)
-	local code_workspace = nil
-	if support_vsc_workspace then
-		code_workspace = get_code_workspace()
-	end
-	return get_key_from_vsc_file(configtype, code_workspace)
 end
 
 local function get_inputs()
