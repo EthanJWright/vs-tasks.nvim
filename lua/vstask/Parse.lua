@@ -494,6 +494,22 @@ local function get_tasks()
 				end
 			end
 
+			-- Escape any problematic chars for the shell
+			if task.args ~= nil then
+				local function shell_escape(arg)
+					if string.find(arg, "[^%w_%-%.%/]") then
+						return string.format("'%s'", string.gsub(arg, "'", "'\\''"))
+					else
+						return arg
+					end
+				end
+
+				local escaped_args = {}
+				for _, arg in pairs(task.args) do
+					table.insert(escaped_args, shell_escape(arg))
+				end
+				task.args = escaped_args
+			end
 			table.insert(task_list, task)
 		end
 	end
