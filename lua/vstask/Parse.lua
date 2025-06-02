@@ -4,7 +4,17 @@ local Predefined = require("vstask.Predefined")
 
 local cache_json_conf = true
 local buffer_options = { "relativenumber" }
+local support_vsc_workspace = true
 Ignore_input_default = false
+
+---@alias config_type string
+local config_type = {
+	TASKS = "tasks",
+	LAUNCH = "launch",
+	INPUTS = "inputs",
+}
+
+local vsc_ws_suffix = ".code-workspace"
 
 local function set_buffer_options(opts)
 	buffer_options = opts
@@ -16,6 +26,10 @@ end
 
 local function set_cache_json_conf(value)
 	cache_json_conf = value
+end
+
+local function set_support_vsc_workspace(value)
+	support_vsc_workspace = value
 end
 
 local function clear_inputs()
@@ -143,15 +157,6 @@ local function handle_pick_string_remember(input, input_config, opts, callback)
 		:find()
 end
 
----@alias config_type string
-local config_type = {
-	TASKS = "tasks",
-	LAUNCH = "launch",
-	INPUTS = "inputs",
-}
-
-local vsc_ws_suffix = ".code-workspace"
-
 ---Attempts to get the first file with a given extension in the directory
 ---@param directory string
 ---@param extension string
@@ -262,9 +267,10 @@ local function time_sorter(a, b)
 
 	-- For unused tasks, prioritize by source
 	if a.entry.source ~= b.entry.source then
-		if a.entry.source == "tasks.json" then
+		local vscode = "vscode"
+		if a.entry.source == vscode then
 			return true
-		elseif b.entry.source == "tasks.json" then
+		elseif b.entry.source == vscode then
 			return false
 		end
 	end
@@ -363,46 +369,53 @@ local function auto_detect_npm()
 	return script_tasks
 end
 
+---Quick function that handles falling back to
+---the vscode folder if the provided path is nil
+---@param key string
+---@param path string?
+---@return table | nil
+local function get_key_from_vsc_file(key, path)
+	local cwd = vim.fn.getcwd()
+	local vscode_folder = vim.fs.joinpath(cwd, config_dir)
+	if not path then
+		-- Tiny override due to "inputs" being in the "tasks.json" file
+		if key == config_type.INPUTS then
+			path = vim.fs.joinpath(vscode_folder, config_type.TASKS .. ".json")
+		else
+			path = vim.fs.joinpath(vscode_folder, key .. ".json")
+		end
+	end
+
+	if not file_exists(path) then
+		return nil
+	end
+	local loaded_config = Config.load_json(path, JSON_PARSER)
+	if not loaded_config then
+		return nil
+	end
+	local _, result = pcall(function()
+		if support_vsc_workspace then
+			local is_code_workspace = path:sub(-#vsc_ws_suffix) == vsc_ws_suffix
+			if is_code_workspace and (key == config_type.TASKS or key == config_type.INPUTS) then
+				loaded_config = loaded_config[config_type.TASKS]
+			end
+		end
+
+		local value = loaded_config[key]
+		return value
+	end)
+	return result
+end
+
 ---Attempts to get a particular part of a VS Code config
 ---.vscode/{file}.json and .code-workspace files.
 ---@param configtype config_type
 ---@return table | nil
 local function get_vscode_config(configtype)
-	---Quick local function that handles falling back to the vscode folder
-	---if the path is nil
-	---@return table | nil
-	local function get_key_from_vsc_file(key, path)
-		local cwd = vim.fn.getcwd()
-		local vscode_folder = vim.fs.joinpath(cwd, config_dir)
-		if not path then
-			-- Tiny override due to "inputs" being in the "tasks.json" file
-			if key == config_type.INPUTS then
-				path = vim.fs.joinpath(vscode_folder, config_type.TASKS .. ".json")
-			else
-				path = vim.fs.joinpath(vscode_folder, key .. ".json")
-			end
-		end
-
-		if not file_exists(path) then
-			return nil
-		end
-		local loaded_config = Config.load_json(path, JSON_PARSER)
-		if not loaded_config then
-			return nil
-		end
-		local _, result = pcall(function()
-			local is_code_workspace = path:sub(-#vsc_ws_suffix) == vsc_ws_suffix
-			if is_code_workspace and (key == config_type.TASKS or key == config_type.INPUTS) then
-				loaded_config = loaded_config[config_type.TASKS]
-			end
-
-			local value = loaded_config[key]
-			return value
-		end)
-		return result
+	local code_workspace = nil
+	if support_vsc_workspace then
+		code_workspace = get_code_workspace()
 	end
-
-	local code_workspace = get_code_workspace()
 	return get_key_from_vsc_file(configtype, code_workspace)
 end
 
@@ -469,7 +482,7 @@ local function get_tasks()
 	local tasks = get_vscode_config(config_type.TASKS)
 	if tasks then
 		for _, task in pairs(tasks) do
-			task.source = "vscode_config" -- Mark tasks from vscode
+			task.source = "vscode" -- Mark tasks from vscode
 
 			-- Check if running on Windows and if a 'windows' specific configuration exists
 			if vim.fn.has("win32") == 1 and task.windows then
@@ -491,7 +504,6 @@ local function get_tasks()
 
 			table.insert(task_list, task)
 		end
-		::continue::
 	end
 
 	-- add script_tasks to Tasks
@@ -748,6 +760,7 @@ return {
 	Set_autodetect = set_autodetect,
 	Set_cache_json_conf = set_cache_json_conf,
 	Set_config_dir = set_config_dir,
+	Set_support_code_workspace = set_support_vsc_workspace,
 	Set_json_parser = set_json_parser,
 	Clear_inputs = clear_inputs,
 	Set_buffer_options = set_buffer_options,

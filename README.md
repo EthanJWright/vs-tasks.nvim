@@ -6,7 +6,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 
 - ⚙ Run commands in a terminal as jobs!
   - split or float the terminal
-  - source from ./vscode/tasks.json
+  - source from `./vscode/tasks.json` or `./*.code-workspace` file
   - source from package.json scripts
 - With jobs picker, see all running and completed jobs, including a live output preview
 - 👀 Run any task as a watched job
@@ -19,7 +19,7 @@ Telescope plugin to load and run tasks in a project that conform to VS Code's [E
 - 🐚 run shell commands with .run() or `<C-r>`
 - basic support for option picker for task input (similar to extension.commandvariable.pickStringRemember)
 - dependsOn and dependsOrder support, utilizing the background jobs feature. View with Jobs picker
-- add default tasks in setup for projects without .vscode/tasks.json, or of you want to add your own
+- add default tasks in setup for projects without `.vscode/tasks.json` or `./*.code-workspace`, or if you want to add your own
 
 ## Example
 
@@ -171,6 +171,7 @@ require("vstask").setup({
   cache_json_conf = true, -- don't read the json conf every time a task is ran
   cache_strategy = "last", -- can be "most" or "last" (most used / last used)
   config_dir = ".vscode", -- directory to look for tasks.json and launch.json
+  support_code_workspace = true -- load from a *.code-workspace file, if available
   telescope_keys = { -- change the telescope bindings used to launch tasks
     vertical = '<C-v>',
     split = '<C-p>',

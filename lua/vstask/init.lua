@@ -24,6 +24,9 @@ local function config(opts)
 	if opts.config_dir ~= nil then
 		M.Parse.Set_config_dir(opts.config_dir)
 	end
+	if opts.support_code_workspace ~= nil then
+		M.Parse.Set_support_code_workspace(opts.support_code_workspace)
+	end
 	if opts.cache_json_conf ~= nil then
 		M.Parse.Set_cache_json_conf(opts.cache_json_conf)
 	end
