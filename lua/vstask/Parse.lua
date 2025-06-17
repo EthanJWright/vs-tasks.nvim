@@ -4,7 +4,17 @@ local Predefined = require("vstask.Predefined")
 
 local cache_json_conf = true
 local buffer_options = { "relativenumber" }
+local support_vsc_workspace = true
 Ignore_input_default = false
+
+---@alias config_type string
+local config_type = {
+	TASKS = "tasks",
+	LAUNCH = "launch",
+	INPUTS = "inputs",
+}
+
+local vsc_ws_suffix = ".code-workspace"
 
 local function set_buffer_options(opts)
 	buffer_options = opts
@@ -16,6 +26,10 @@ end
 
 local function set_cache_json_conf(value)
 	cache_json_conf = value
+end
+
+local function set_support_vsc_workspace(value)
+	support_vsc_workspace = value
 end
 
 local function clear_inputs()
@@ -143,6 +157,54 @@ local function handle_pick_string_remember(input, input_config, opts, callback)
 		:find()
 end
 
+---Attempts to get the first file with a given extension in the directory
+---@param directory string
+---@param extension string
+---@return string | nil
+local function get_file_with_ext(directory, extension)
+	local dir = vim.uv.fs_opendir(directory)
+	if not dir then
+		return nil
+	end
+
+	-- support both ".filetype" and "filetype"
+	extension = extension:gsub("^%.", "")
+
+	local handle = vim.uv.fs_scandir(directory)
+	local name, typ
+
+	while handle do
+		name, typ = vim.uv.fs_scandir_next(handle)
+		if not name then
+			break
+		end
+		if typ == "file" then
+			local ext = vim.fn.fnamemodify(name, ":e")
+			if ext == extension then
+				return vim.fs.joinpath(directory, name)
+			end
+		end
+	end
+	return nil
+end
+
+---Gets code-workspace file from cwd, if it exists
+---@return string | nil
+local function get_code_workspace()
+	local cwd = vim.fn.getcwd()
+	return get_file_with_ext(cwd, vsc_ws_suffix)
+end
+
+---@param configtype config_type
+---@param level vim.log.levels? defaults to WARN
+local function notify_missing_vs_config(configtype, level)
+	if not level then
+		level = vim.log.levels.WARN
+	end
+	local missing_config_message = 'VS Code "' .. configtype .. '" configuration could not be found.'
+	vim.notify(missing_config_message, level)
+end
+
 local config_dir = ".vscode"
 
 local function set_config_dir(dirname)
@@ -159,8 +221,6 @@ local function set_autodetect(autodetect)
 		auto_detect.npm = autodetect.npm
 	end
 end
-
-local MISSING_FILE_MESSAGE = "tasks.json file could not be found."
 
 local CACHE_STRATEGY = nil
 local set_cache_strategy = function(strategy)
@@ -188,42 +248,6 @@ local function setContains(set, key)
 	return set[key] ~= nil
 end
 
-local function get_inputs()
-	if Inputs ~= nil and next(Inputs) ~= nil then
-		return Inputs
-	end
-	local path = vim.fn.getcwd() .. "/" .. config_dir .. "/tasks.json"
-	if not file_exists(path) then
-		vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
-		return {}
-	end
-	local config = Config.load_json(path, JSON_PARSER)
-	if config == nil or config["inputs"] == nil then
-		Inputs = {}
-		return Inputs
-	end
-
-	local inputs = config["inputs"]
-	for _, input_dict in pairs(inputs) do
-		local input_id = input_dict["id"]
-		-- Skip if input already exists
-		if Inputs[input_id] ~= nil then
-			goto continue
-		end
-
-		-- Create new input entry
-		Inputs[input_id] = input_dict
-		-- Set value to default if provided, otherwise empty string
-		Inputs[input_id]["value"] = input_dict["default"] or ""
-		if Ignore_input_default then
-			Inputs[input_id]["value"] = ""
-		end
-
-		::continue::
-	end
-	return Inputs
-end
-
 local task_cache = nil
 local launch_cache = nil
 
@@ -243,9 +267,10 @@ local function time_sorter(a, b)
 
 	-- For unused tasks, prioritize by source
 	if a.entry.source ~= b.entry.source then
-		if a.entry.source == "tasks.json" then
+		local vscode = "vscode"
+		if a.entry.source == vscode then
 			return true
-		elseif b.entry.source == "tasks.json" then
+		elseif b.entry.source == vscode then
 			return false
 		end
 	end
@@ -344,14 +369,77 @@ local function auto_detect_npm()
 	return script_tasks
 end
 
-local function tasks_file_exists()
+---Attempts to get a particular part of a VS Code config
+---.vscode/{file}.json and .code-workspace files.
+---@param type config_type
+---@return table | nil
+local function get_vscode_config(type)
+	local path = nil
+	if support_vsc_workspace then
+		path = get_code_workspace()
+	end
+
 	local cwd = vim.fn.getcwd()
-	local path = cwd .. "/" .. config_dir .. "/tasks.json"
-	return file_exists(path)
+	local vscode_folder = vim.fs.joinpath(cwd, config_dir)
+	if not path then
+		-- Tiny override due to "inputs" being in the "tasks.json" file
+		if type == config_type.INPUTS then
+			path = vim.fs.joinpath(vscode_folder, config_type.TASKS .. ".json")
+		else
+			path = vim.fs.joinpath(vscode_folder, type .. ".json")
+		end
+	end
+
+	if not file_exists(path) then
+		return nil
+	end
+	local loaded_config = Config.load_json(path, JSON_PARSER)
+	if not loaded_config then
+		return nil
+	end
+	local _, result = pcall(function()
+		if support_vsc_workspace then
+			local is_code_workspace = path:sub(-#vsc_ws_suffix) == vsc_ws_suffix
+			if is_code_workspace and (type == config_type.TASKS or type == config_type.INPUTS) then
+				loaded_config = loaded_config[config_type.TASKS]
+			end
+		end
+
+		local value = loaded_config[type]
+		return value
+	end)
+	return result
 end
 
-local function notify_missing_task_file()
-	vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
+local function get_inputs()
+	if Inputs ~= nil and next(Inputs) ~= nil then
+		return Inputs
+	end
+	local inputs = get_vscode_config(config_type.INPUTS)
+
+	if not inputs then
+		notify_missing_vs_config(config_type.INPUTS)
+		return {}
+	end
+
+	for _, input_dict in pairs(inputs) do
+		local input_id = input_dict["id"]
+		-- Skip if input already exists
+		if Inputs[input_id] ~= nil then
+			goto continue
+		end
+
+		-- Create new input entry
+		Inputs[input_id] = input_dict
+		-- Set value to default if provided, otherwise empty string
+		Inputs[input_id]["value"] = input_dict["default"] or ""
+		if Ignore_input_default then
+			Inputs[input_id]["value"] = ""
+		end
+
+		::continue::
+	end
+	return Inputs
 end
 
 local function get_tasks()
@@ -380,36 +468,50 @@ local function get_tasks()
 		return task_list
 	end
 
-	local cwd = vim.fn.getcwd()
-	local path = cwd .. "/" .. config_dir .. "/tasks.json"
-
 	get_inputs()
 
-	-- add vscode/tasks.json
-	if tasks_file_exists() == true then
-		local tasks = Config.load_json(path, JSON_PARSER)
-		if tasks == nil then
-			goto continue
-		end
+	-- add vscode tasks configuration
+	local tasks = get_vscode_config(config_type.TASKS)
+	if tasks then
+		for _, task in pairs(tasks) do
+			task.source = "vscode" -- Mark tasks from vscode
 
-		for _, task in pairs(tasks["tasks"]) do
-			task.source = "tasks.json" -- Mark tasks from tasks.json
-			
 			-- Check if running on Windows and if a 'windows' specific configuration exists
-			if vim.fn.has('win32') == 1 and task.windows then
+			if vim.fn.has("win32") == 1 and task.windows then
 				-- Iterate over the properties defined in the 'windows' block
 				-- and override the top-level task properties
 				for win_key, win_value in pairs(task.windows) do
 					-- Only override if the key is actually one we'd expect in a task
-					if task[win_key] ~= nil or win_key == 'command' or win_key == 'args' or win_key == 'options' or win_key == 'cwd' then
+					if
+						task[win_key] ~= nil
+						or win_key == "command"
+						or win_key == "args"
+						or win_key == "options"
+						or win_key == "cwd"
+					then
 						task[win_key] = win_value
 					end
 				end
 			end
-			
+
+			-- Escape any problematic chars for the shell
+			if task.args ~= nil then
+				local function shell_escape(arg)
+					if string.find(arg, "[^%w_%-%.%/]") then
+						return string.format("'%s'", string.gsub(arg, "'", "'\\''"))
+					else
+						return arg
+					end
+				end
+
+				local escaped_args = {}
+				for _, arg in pairs(task.args) do
+					table.insert(escaped_args, shell_escape(arg))
+				end
+				task.args = escaped_args
+			end
 			table.insert(task_list, task)
 		end
-		::continue::
 	end
 
 	-- add script_tasks to Tasks
@@ -431,7 +533,7 @@ local function get_tasks()
 	task_cache = create_cache(task_list, "label")
 
 	if task_list == nil or #task_list == 0 then
-		notify_missing_task_file()
+		notify_missing_vs_config(config_type.TASKS, vim.log.levels.ERROR)
 	end
 
 	return task_list
@@ -465,9 +567,11 @@ end
 local function get_input_variables(command)
 	local input_variables = {}
 	local count = 0
-	for w in string.gmatch(command, "${input:([^}]*)}") do
-		table.insert(input_variables, w)
-		count = count + 1
+	if command then
+		for w in string.gmatch(command, "${input:([^}]*)}") do
+			table.insert(input_variables, w)
+			count = count + 1
+		end
 	end
 	return input_variables, count
 end
@@ -514,13 +618,16 @@ end
 local function get_predefined_variables(command)
 	local predefined_vars = {}
 	local count = 0
-	for defined_var, _ in pairs(Predefined) do
-		local match_pattern = "${" .. defined_var .. "}"
-		for w in string.gmatch(command, match_pattern) do
-			if w ~= nil then
-				for word in string.gmatch(command, "%{(%a+)}") do
-					table.insert(predefined_vars, word)
-					count = count + 1
+
+	if command then
+		for defined_var, _ in pairs(Predefined) do
+			local match_pattern = "${" .. defined_var .. "}"
+			for w in string.gmatch(command, match_pattern) do
+				if w ~= nil then
+					for word in string.gmatch(command, "%{(%a+)}") do
+						table.insert(predefined_vars, word)
+						count = count + 1
+					end
 				end
 			end
 		end
@@ -634,17 +741,13 @@ local function get_launches()
 	if launch_cache ~= nil then
 		return manage_cache(launch_cache, CACHE_STRATEGY)
 	end
-	local path = vim.fn.getcwd() .. "/" .. config_dir .. "/launch.json"
-	if not file_exists(path) then
-		vim.notify(MISSING_FILE_MESSAGE, vim.log.levels.ERROR)
+	local configurations = get_vscode_config(config_type.LAUNCH)
+	if not configurations then
+		notify_missing_vs_config(config_type.LAUNCH)
 		return {}
 	end
 	get_inputs()
-	local configurations = Config.load_json(path, JSON_PARSER)
-
-	if configurations ~= nil then
-		Launches = configurations["configurations"]
-	end
+	Launches = configurations["configurations"]
 	launch_cache = create_cache(Launches, "name")
 	return Launches
 end
@@ -670,6 +773,7 @@ return {
 	Set_autodetect = set_autodetect,
 	Set_cache_json_conf = set_cache_json_conf,
 	Set_config_dir = set_config_dir,
+	Set_support_code_workspace = set_support_vsc_workspace,
 	Set_json_parser = set_json_parser,
 	Clear_inputs = clear_inputs,
 	Set_buffer_options = set_buffer_options,
