@@ -230,6 +230,80 @@ local function inputs_picker(opts)
 		:find()
 end
 
+local function find_task_by_label(task_list, label)
+	for _, task in ipairs(task_list) do
+		if task.label == label then
+			return task
+		end
+	end
+	return nil
+end
+
+local function execute_pre_launch_task(pre_launch_task, main_launch_config, direction, opts)
+	local pre_task_command = Job.clean_command(pre_launch_task.command, pre_launch_task.options)
+	if pre_launch_task.args then
+		pre_task_command = Parse.replace(pre_task_command)
+		pre_task_command = Parse.Build_launch(pre_task_command, pre_launch_task.args)
+	end
+
+	local execute_main_launch = function()
+		local cleaned = Job.clean_command(main_launch_config.program, main_launch_config.options)
+		if main_launch_config.args then
+			cleaned = Parse.replace(cleaned)
+			cleaned = Parse.Build_launch(cleaned, main_launch_config.args)
+		end
+
+		local execute_launch = function(prepared_command)
+			Job.start_job({
+				label = main_launch_config.name,
+				command = prepared_command,
+				silent = false,
+				watch = direction == "watch_job",
+				terminal = direction ~= "background_job" and direction ~= "watch_job",
+				direction = direction,
+				on_complete = function()
+					refresh_picker()
+				end,
+			})
+		end
+
+		Parse.replace_and_run(cleaned, execute_launch, opts)
+	end
+
+	local execute_pre_task = function(prepared_pre_command)
+		Job.start_job({
+			label = "PreLaunch: " .. pre_launch_task.label,
+			command = prepared_pre_command,
+			silent = false,
+			watch = false,
+			terminal = true,
+			direction = "current",
+			on_complete = execute_main_launch,
+		})
+	end
+
+	Parse.replace_and_run(pre_task_command, execute_pre_task, opts)
+end
+
+local function handle_pre_launch_task(launch_config, direction, opts)
+	if not launch_config.preLaunchTask then
+		return false
+	end
+
+	local pre_launch_task_name = launch_config.preLaunchTask
+	local task_list = Parse.Tasks()
+	local pre_launch_task = find_task_by_label(task_list, pre_launch_task_name)
+
+	if pre_launch_task then
+		vim.notify("Running preLaunchTask: " .. pre_launch_task_name, vim.log.levels.INFO)
+		execute_pre_launch_task(pre_launch_task, launch_config, direction, opts)
+		return true
+	else
+		vim.notify("preLaunchTask '" .. pre_launch_task_name .. "' not found in tasks", vim.log.levels.WARN)
+		return false
+	end
+end
+
 local function handle_direction(direction, prompt_bufnr, selection_list, is_launch, opts)
 	local selection = state.get_selected_entry()
 	actions.close(prompt_bufnr)
@@ -246,11 +320,17 @@ local function handle_direction(direction, prompt_bufnr, selection_list, is_laun
 		label = "CMD: " .. current_line
 		args = nil
 	elseif is_launch then
-		command = selection_list[selection.index]["program"]
-		options = selection_list[selection.index]["options"]
-		label = selection_list[selection.index]["name"]
-		args = selection_list[selection.index]["args"]
+		local launch_config = selection_list[selection.index]
+		command = launch_config["program"]
+		options = launch_config["options"]
+		label = launch_config["name"]
+		args = launch_config["args"]
 		Parse.Used_launch(label)
+
+		-- Handle preLaunchTask
+		if handle_pre_launch_task(launch_config, direction, opts) then
+			return
+		end
 	else
 		command = selection_list[selection.index]["command"]
 		options = selection_list[selection.index]["options"]
@@ -402,7 +482,7 @@ local function launches_picker(opts)
 
 					for direction, mapping in pairs(directions) do
 						local handler = function()
-							direction_handler(direction, prompt_bufnr, map, launch_list)
+							direction_handler(direction, prompt_bufnr, map, launch_list, opts)
 						end
 						map("i", mapping, handler)
 						map("n", mapping, handler)

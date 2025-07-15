@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "MyProject Mac Development Build",
+      "group": "build",
+      "command": "echo",
+      "args": [
+        "Building MyProject for Mac Development..."
+      ],
+      "type": "shell"
+    },
+    {
+      "label": "Clean Build",
+      "command": "echo",
+      "args": [
+        "Cleaning build artifacts..."
+      ],
+      "type": "shell"
+    }
+  ]
+}

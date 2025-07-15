@@ -1,0 +1,24 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch MyProjectEditor (Development)",
+      "request": "launch",
+      "program": "echo",
+      "preLaunchTask": "MyProject Mac Development Build",
+      "args": [
+        "Launching MyProject Editor with latest build..."
+      ],
+      "type": "shell"
+    },
+    {
+      "name": "Launch Without PreTask",
+      "request": "launch", 
+      "program": "echo",
+      "args": [
+        "Launching without pre-task..."
+      ],
+      "type": "shell"
+    }
+  ]
+}
