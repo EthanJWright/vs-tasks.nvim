@@ -1,6 +1,6 @@
 # VS Tasks
 
-Telescope plugin to load and run tasks in a project that conform to VS Code's [Editor Tasks](https://code.visualstudio.com/docs/editor/tasks)
+A plugin to load and run tasks in a project that conform to VS Code's [Editor Tasks](https://code.visualstudio.com/docs/editor/tasks). Supports multiple picker backends including Telescope and snacks.nvim.
 
 ## Features
 
@@ -28,6 +28,8 @@ Short Demo
 ![Short Demo](https://i.imgur.com/sQtRQdO.gif)
 
 ## Setup
+
+### With Telescope (Default)
 
 With Plug:
 
@@ -64,7 +66,35 @@ With Lazy:
 }
 ```
 
-Set up keybindings:
+### With snacks.nvim
+
+With Lazy:
+
+```lua
+{
+  "EthanJWright/vs-tasks.nvim",
+  dependencies = {
+    "nvim-lua/popup.nvim",
+    "nvim-lua/plenary.nvim",
+    "folke/snacks.nvim",
+  },
+  opts = {
+    picker = "snacks" -- Use snacks.nvim picker instead of telescope
+  }
+}
+```
+
+## Keybindings
+
+### With Telescope (requires loading extension)
+
+First, make sure to load the plugin in your telescope config:
+
+```lua
+require("telescope").load_extension("vstask")
+```
+
+Then set up keybindings:
 
 ```vim
 nnoremap <Leader>ta :lua require("telescope").extensions.vstask.tasks()<CR>
@@ -73,7 +103,17 @@ nnoremap <Leader>tj :lua require("telescope").extensions.vstask.jobs()<CR>
 nnoremap <Leader>td :lua require("telescope").extensions.vstask.clear_inputs()<CR>
 nnoremap <Leader>tc :lua require("telescope").extensions.vstask.cleanup_completed_jobs()<CR>
 nnoremap <Leader>tl :lua require('telescope').extensions.vstask.launch()<cr>
-nnoremap <Leader>tl :lua require('telescope').extensions.vstask.command()<cr>
+nnoremap <Leader>tr :lua require('telescope').extensions.vstask.command()<cr>
+```
+
+### Universal API (works with any picker)
+
+```vim
+nnoremap <Leader>ta :lua require("vstask").tasks()<CR>
+nnoremap <Leader>ti :lua require("vstask").inputs()<CR>
+nnoremap <Leader>tj :lua require("vstask").jobs()<CR>
+nnoremap <Leader>tl :lua require("vstask").launches()<CR>
+nnoremap <Leader>tr :lua require("vstask").command()<CR>
 ```
 
 ## Functions
@@ -151,15 +191,34 @@ nnoremap <Leader>tl :lua require('telescope').extensions.vstask.command()<cr>
 VS Tasks can auto detect certain scripts from your package, such as npm
 scripts.
 
+## Picker Support
+
+VS Tasks supports multiple picker backends:
+
+### Telescope (Default)
+- Full-featured picker with preview
+- Requires `nvim-telescope/telescope.nvim`
+- Load extension: `require("telescope").load_extension("vstask")`
+
+### snacks.nvim
+- Modern picker with excellent UX
+- Requires `folke/snacks.nvim`
+- Configure with `picker = "snacks"` in setup
+
+### Custom Picker
+You can also provide your own picker implementation that follows the picker interface defined in `lua/vstask/picker.lua`.
+
 ## Configuration
 
+- Configure picker backend (telescope, snacks, or custom)
 - Configure toggle term use
 - Configure terminal behavior
 - Cache json conf sets whether the config will be ran every time. If the cache
   is removed, this will also remove cache features such as remembering last
   ran command
 
-Make sure to load the plugin in your telescope config
+### With Telescope
+Make sure to load the plugin in your telescope config:
 
 ```lua
 require("telescope").load_extension("vstask")
@@ -214,6 +273,32 @@ require("vstask").setup({
   ignore_input_default = false -- always ignore an input default if `true`
 })
 EOF
+```
+
+### Alternative Picker Configurations
+
+#### With snacks.nvim
+
+```lua
+require("vstask").setup({
+  picker = "snacks", -- Use snacks.nvim picker
+  cache_json_conf = true,
+  cache_strategy = "last",
+  config_dir = ".vscode",
+  support_code_workspace = true,
+  -- Note: telescope_keys still work for key mappings even with snacks picker
+  telescope_keys = {
+    vertical = '<C-v>',
+    split = '<C-p>',
+    tab = '<C-t>',
+    current = '<CR>',
+    background = '<C-b>',
+    watch_job = '<C-w>',
+    kill_job = '<C-d>',
+    run = '<C-r>',
+  },
+  -- ... other configuration options work the same
+})
 ```
 
 ### Work with json5 files

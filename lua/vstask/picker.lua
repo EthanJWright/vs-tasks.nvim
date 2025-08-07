@@ -36,6 +36,10 @@ function M.set_picker(picker_impl)
 	end
 	
 	M.current_picker = picker_impl
+	
+	-- Log which picker is being used
+	local picker_name = picker_impl.name or "unknown"
+	vim.notify("VS Tasks: Using " .. picker_name .. " picker", vim.log.levels.INFO)
 end
 
 -- Proxy methods that delegate to the current picker

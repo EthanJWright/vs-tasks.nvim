@@ -24,6 +24,9 @@ local function config(opts)
 		if opts.picker == "telescope" then
 			local telescope_picker = require("vstask.pickers.telescope")
 			picker.set_picker(telescope_picker)
+		elseif opts.picker == "snacks" then
+			local snacks_picker = require("vstask.pickers.snacks")
+			picker.set_picker(snacks_picker)
 		else
 			-- Custom picker implementation
 			picker.set_picker(opts.picker)
