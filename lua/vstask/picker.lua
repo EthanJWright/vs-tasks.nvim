@@ -5,15 +5,15 @@ local M = {}
 
 M.PickerInterface = {
 	-- Core picker functions
-	tasks = function(opts) end,
-	launches = function(opts) end,
-	inputs = function(opts) end,
-	jobs = function(opts) end,
-	command_input = function(opts) end,
+	tasks = function(_opts) end,
+	launches = function(_opts) end,
+	inputs = function(_opts) end,
+	jobs = function(_opts) end,
+	command_input = function(_opts) end,
 
 	-- Configuration
-	set_mappings = function(mappings) end,
-	set_term_opts = function(opts) end,
+	set_mappings = function(_mappings) end,
+	set_term_opts = function(_opts) end,
 
 	-- State management
 	get_last = function() end,

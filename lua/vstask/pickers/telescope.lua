@@ -97,18 +97,8 @@ end
 function M.tasks(opts)
 	opts = opts or {}
 
-	local task_list = Parse.Tasks()
-
-	if opts.run_empty then
-		task_list = {}
-	end
-
-	if task_list == nil then
-		vim.notify("No tasks found", vim.log.levels.INFO)
-		return
-	end
-
-	if vim.tbl_isempty(task_list) and opts.run_empty ~= true then
+	local task_list = core.get_tasks_data(opts)
+	if not task_list then
 		return
 	end
 
@@ -140,9 +130,8 @@ end
 function M.launches(opts)
 	opts = opts or {}
 
-	local launch_list = Parse.Launches()
-
-	if vim.tbl_isempty(launch_list) then
+	local launch_list = core.get_launches_data()
+	if not launch_list then
 		return
 	end
 
@@ -189,9 +178,8 @@ end
 function M.inputs(opts)
 	opts = opts or {}
 
-	local input_list = Parse.Inputs()
-
-	if input_list == nil or vim.tbl_isempty(input_list) then
+	local input_list = core.get_inputs_data()
+	if not input_list then
 		return
 	end
 
@@ -199,20 +187,7 @@ function M.inputs(opts)
 	local selection_list = {}
 
 	for _, input_dict in pairs(input_list) do
-		local description = "set input"
-		if input_dict["command"] == "extension.commandvariable.pickStringRemember" then
-			description = "pick input from set list"
-		end
-
-		if input_dict["description"] ~= nil then
-			description = input_dict["description"]
-		end
-
-		local add_current = ""
-		if input_dict["value"] ~= "" then
-			add_current = " [" .. input_dict["value"] .. "] "
-		end
-		local current_task = input_dict["id"] .. add_current .. " => " .. description
+		local current_task, _description = core.format_input_entry(input_dict)
 		table.insert(inputs_formatted, current_task)
 		table.insert(selection_list, input_dict)
 	end
@@ -244,11 +219,8 @@ end
 function M.jobs(opts)
 	opts = opts or {}
 
-	local jobs_list = Job.build_jobs_list()
-	local jobs_formatted = core.format_jobs_list(jobs_list)
-
-	if vim.tbl_isempty(jobs_formatted) then
-		vim.notify("No jobs available", vim.log.levels.INFO)
+	local jobs_list, jobs_formatted = core.get_jobs_data()
+	if not jobs_list or not jobs_formatted then
 		return
 	end
 

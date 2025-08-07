@@ -237,8 +237,6 @@ M.start_job = function(opts)
 	local buf = vim.api.nvim_create_buf(open_terminal, true)
 	if open_terminal == true then
 		M.split_to_direction(options.direction)
-	else
-		notify("Starting backgrounded task... " .. options.label, vim.log.levels.INFO)
 	end
 
 	-- show the buffer

@@ -85,8 +85,11 @@ function M.execute_pre_launch_task(pre_launch_task, main_launch_config, directio
 		local execute_launch = function(prepared_command)
 			-- Log launch execution with picker info
 			picker_name = picker_name or "unknown"
-			vim.notify(string.format("VS Tasks (%s): Running launch '%s'", picker_name, main_launch_config.name), vim.log.levels.INFO)
-			
+			vim.notify(
+				string.format("VS Tasks (%s): Running launch '%s'", picker_name, main_launch_config.name),
+				vim.log.levels.INFO
+			)
+
 			Job.start_job({
 				label = main_launch_config.name,
 				command = prepared_command,
@@ -202,8 +205,8 @@ function M.handle_direction(direction, selection, selection_list, is_launch, opt
 	local process = function(prepared_command)
 		-- Log task execution with picker info
 		picker_name = picker_name or "unknown"
-		vim.notify(string.format("VS Tasks (%s): Running task '%s'", picker_name, label), vim.log.levels.INFO)
-		
+		vim.notify(string.format("vstasks: running task '%s'", label), vim.log.levels.INFO)
+
 		Job.start_job({
 			label = label,
 			command = prepared_command,
@@ -313,8 +316,8 @@ function M.create_command_input_handler(mappings, on_refresh, picker_name)
 
 					-- Log command execution with picker info
 					picker_name = picker_name or "unknown"
-					vim.notify(string.format("VS Tasks (%s): Running command '%s'", picker_name, command), vim.log.levels.INFO)
-					
+					vim.notify(string.format("vstasks: running command '%s'", command), vim.log.levels.INFO)
+
 					Job.start_job({
 						label = "Command: " .. command,
 						command = command,
@@ -386,4 +389,148 @@ function M.create_job_previewer(jobs_list, preview_bufnr)
 	end
 end
 
+-- Shared data fetching and validation helpers
+function M.get_tasks_data(opts)
+	opts = opts or {}
+
+	local task_list = Parse.Tasks()
+
+	if opts.run_empty then
+		task_list = {}
+	end
+
+	if task_list == nil then
+		vim.notify("No tasks found", vim.log.levels.INFO)
+		return nil
+	end
+
+	if vim.tbl_isempty(task_list) and opts.run_empty ~= true then
+		return nil
+	end
+
+	return task_list
+end
+
+function M.get_launches_data()
+	local launch_list = Parse.Launches()
+
+	if vim.tbl_isempty(launch_list) then
+		return nil
+	end
+
+	return launch_list
+end
+
+function M.get_inputs_data()
+	local input_list = Parse.Inputs()
+
+	if input_list == nil or vim.tbl_isempty(input_list) then
+		return nil
+	end
+
+	return input_list
+end
+
+function M.get_jobs_data()
+	local jobs_list = Job.build_jobs_list()
+	local jobs_formatted = M.format_jobs_list(jobs_list)
+
+	if vim.tbl_isempty(jobs_formatted) then
+		vim.notify("No jobs available", vim.log.levels.INFO)
+		return nil, nil
+	end
+
+	return jobs_list, jobs_formatted
+end
+
+-- Shared input formatting logic
+function M.format_input_entry(input_dict)
+	local description = "set input"
+	if input_dict["command"] == "extension.commandvariable.pickStringRemember" then
+		description = "pick input from set list"
+	end
+
+	if input_dict["description"] ~= nil then
+		description = input_dict["description"]
+	end
+
+	local add_current = ""
+	if input_dict["value"] ~= "" then
+		add_current = " [" .. input_dict["value"] .. "] "
+	end
+
+	return input_dict["id"] .. add_current .. " => " .. description, description
+end
+
+-- Shared job preview content creation
+function M.create_job_preview_content(job_info, is_running)
+	local output = ""
+	if Job.is_job_running(job_info.id) then
+		local buffer_content = Job.get_buffer_content(job_info.id)
+		output = table.concat(buffer_content or {}, "\n")
+	else
+		local background_job = Job.get_background_job(job_info.id)
+		local job_output = background_job.output or {}
+		if type(job_output) == "string" then
+			job_output = vim.split(job_output, "\n")
+		end
+		output = table.concat(job_output, "\n")
+	end
+
+	return "Job: "
+		.. job_info.label
+		.. "\n"
+		.. "Status: "
+		.. (is_running and "Running" or "Completed")
+		.. "\n"
+		.. "Command: "
+		.. (job_info.command or "")
+		.. "\n\n"
+		.. "Output:\n"
+		.. output
+end
+
+-- Shared task preview content creation
+function M.create_task_preview_content(task)
+	return "Command: "
+		.. (task.command or "")
+		.. "\n"
+		.. "Description: "
+		.. (task.description or "")
+		.. "\n"
+		.. "Type: "
+		.. (task.type or "shell")
+		.. "\n"
+		.. "Group: "
+		.. (task.group and task.group.kind or "default")
+end
+
+-- Shared launch preview content creation
+function M.create_launch_preview_content(launch)
+	return "Program: "
+		.. (launch.program or "")
+		.. "\n"
+		.. "Type: "
+		.. (launch.type or "")
+		.. "\n"
+		.. "Request: "
+		.. (launch.request or "")
+		.. "\n"
+		.. "Args: "
+		.. (launch.args and table.concat(launch.args, " ") or "")
+end
+
+-- Shared input preview content creation
+function M.create_input_preview_content(input_dict, description)
+	return "ID: "
+		.. input_dict["id"]
+		.. "\n"
+		.. "Current Value: "
+		.. (input_dict["value"] or "(empty)")
+		.. "\n"
+		.. "Description: "
+		.. description
+end
+
 return M
+

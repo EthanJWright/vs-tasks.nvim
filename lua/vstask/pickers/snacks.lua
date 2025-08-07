@@ -78,18 +78,8 @@ end
 function M.tasks(opts)
 	opts = opts or {}
 
-	local task_list = Parse.Tasks()
-
-	if opts.run_empty then
-		task_list = {}
-	end
-
-	if task_list == nil then
-		vim.notify("No tasks found", vim.log.levels.INFO)
-		return
-	end
-
-	if vim.tbl_isempty(task_list) and opts.run_empty ~= true then
+	local task_list = core.get_tasks_data(opts)
+	if not task_list then
 		return
 	end
 
@@ -103,10 +93,7 @@ function M.tasks(opts)
 			command = task.command,
 			description = task.description or "",
 			preview = {
-				text = "Command: " .. (task.command or "") .. "\n" ..
-					   "Description: " .. (task.description or "") .. "\n" ..
-					   "Type: " .. (task.type or "shell") .. "\n" ..
-					   "Group: " .. (task.group and task.group.kind or "default")
+				text = core.create_task_preview_content(task)
 			}
 		})
 	end
@@ -137,9 +124,8 @@ end
 function M.launches(opts)
 	opts = opts or {}
 
-	local launch_list = Parse.Launches()
-
-	if vim.tbl_isempty(launch_list) then
+	local launch_list = core.get_launches_data()
+	if not launch_list then
 		return
 	end
 
@@ -153,10 +139,7 @@ function M.launches(opts)
 			program = launch.program,
 			description = launch.type or "",
 			preview = {
-				text = "Program: " .. (launch.program or "") .. "\n" ..
-					   "Type: " .. (launch.type or "") .. "\n" ..
-					   "Request: " .. (launch.request or "") .. "\n" ..
-					   "Args: " .. (launch.args and table.concat(launch.args, " ") or "")
+				text = core.create_launch_preview_content(launch)
 			}
 		})
 	end
@@ -207,9 +190,8 @@ end
 function M.inputs(opts)
 	opts = opts or {}
 
-	local input_list = Parse.Inputs()
-
-	if input_list == nil or vim.tbl_isempty(input_list) then
+	local input_list = core.get_inputs_data()
+	if not input_list then
 		return
 	end
 
@@ -218,21 +200,7 @@ function M.inputs(opts)
 	local selection_list = {}
 
 	for i, input_dict in pairs(input_list) do
-		local description = "set input"
-		if input_dict["command"] == "extension.commandvariable.pickStringRemember" then
-			description = "pick input from set list"
-		end
-
-		if input_dict["description"] ~= nil then
-			description = input_dict["description"]
-		end
-
-		local add_current = ""
-		if input_dict["value"] ~= "" then
-			add_current = " [" .. input_dict["value"] .. "] "
-		end
-
-		local display_text = input_dict["id"] .. add_current .. " => " .. description
+		local display_text, description = core.format_input_entry(input_dict)
 
 		table.insert(items, {
 			idx = i,
@@ -241,9 +209,7 @@ function M.inputs(opts)
 			value = input_dict["value"] or "",
 			description = description,
 			preview = {
-				text = "ID: " .. input_dict["id"] .. "\n" ..
-					   "Current Value: " .. (input_dict["value"] or "(empty)") .. "\n" ..
-					   "Description: " .. description
+				text = core.create_input_preview_content(input_dict, description)
 			}
 		})
 		table.insert(selection_list, input_dict)
@@ -267,11 +233,8 @@ end
 function M.jobs(opts)
 	opts = opts or {}
 
-	local jobs_list = Job.build_jobs_list()
-	local jobs_formatted = core.format_jobs_list(jobs_list)
-
-	if vim.tbl_isempty(jobs_formatted) then
-		vim.notify("No jobs available", vim.log.levels.INFO)
+	local jobs_list, jobs_formatted = core.get_jobs_data()
+	if not jobs_list or not jobs_formatted then
 		return
 	end
 
@@ -280,20 +243,6 @@ function M.jobs(opts)
 	for i, job_info in ipairs(jobs_list) do
 		local is_running = not job_info.completed and vim.fn.jobwait({ job_info.id }, 0)[1] == -1
 		local formatted_text = core.format_job_entry(job_info, is_running)
-		
-		-- Create preview content
-		local output = ""
-		if Job.is_job_running(job_info.id) then
-			local buffer_content = Job.get_buffer_content(job_info.id)
-			output = table.concat(buffer_content or {}, "\n")
-		else
-			local background_job = Job.get_background_job(job_info.id)
-			local job_output = background_job.output or {}
-			if type(job_output) == "string" then
-				job_output = vim.split(job_output, "\n")
-			end
-			output = table.concat(job_output, "\n")
-		end
 
 		table.insert(items, {
 			idx = i,
@@ -302,10 +251,7 @@ function M.jobs(opts)
 			label = job_info.label,
 			is_running = is_running,
 			preview = {
-				text = "Job: " .. job_info.label .. "\n" ..
-					   "Status: " .. (is_running and "Running" or "Completed") .. "\n" ..
-					   "Command: " .. (job_info.command or "") .. "\n\n" ..
-					   "Output:\n" .. output
+				text = core.create_job_preview_content(job_info, is_running)
 			}
 		})
 	end
