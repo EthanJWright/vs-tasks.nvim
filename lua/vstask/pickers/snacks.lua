@@ -18,9 +18,6 @@ end
 
 -- Helper function to handle direction-based task execution
 local function handle_snacks_direction(direction, item, selection_list, is_launch, opts)
-	-- Debug logging
-	vim.notify(string.format("VS Tasks (snacks): Key pressed, direction=%s, task=%s", direction, item.name or "unknown"), vim.log.levels.INFO)
-	
 	local selection = { index = item.idx }
 	core.handle_direction(direction, selection, selection_list, is_launch, opts, refresh_picker, M.name)
 end
@@ -73,12 +70,6 @@ local function create_snacks_config(selection_list, is_launch, opts)
 		}
 	}
 	
-	-- Debug logging
-	local debug_keys = {}
-	for key, action in pairs(win_config.input.keys) do
-		table.insert(debug_keys, key .. "→" .. action[1])
-	end
-	vim.notify("VS Tasks (snacks): Key mappings: " .. table.concat(debug_keys, ", "), vim.log.levels.INFO)
 	
 	return actions, win_config
 end
@@ -379,12 +370,6 @@ function M.jobs(opts)
 		}
 	}
 
-	-- Debug logging for job key mappings
-	local debug_job_keys = {}
-	for key, action in pairs(job_win_config.input.keys) do
-		table.insert(debug_job_keys, key .. "→" .. action[1])
-	end
-	vim.notify("VS Tasks (snacks): Job key mappings: " .. table.concat(debug_job_keys, ", "), vim.log.levels.INFO)
 
 	return require("snacks").picker.pick({
 		source = "vstask_jobs",

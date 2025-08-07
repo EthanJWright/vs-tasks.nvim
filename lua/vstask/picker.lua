@@ -10,15 +10,15 @@ M.PickerInterface = {
 	inputs = function(opts) end,
 	jobs = function(opts) end,
 	command_input = function(opts) end,
-	
+
 	-- Configuration
 	set_mappings = function(mappings) end,
 	set_term_opts = function(opts) end,
-	
+
 	-- State management
 	get_last = function() end,
 	refresh_picker = function() end,
-	
+
 	-- Job management (for jobs picker)
 	add_watch_autocmd = function() end,
 }
@@ -34,12 +34,8 @@ function M.set_picker(picker_impl)
 			error("Picker implementation missing method: " .. method_name)
 		end
 	end
-	
+
 	M.current_picker = picker_impl
-	
-	-- Log which picker is being used
-	local picker_name = picker_impl.name or "unknown"
-	vim.notify("VS Tasks: Using " .. picker_name .. " picker", vim.log.levels.INFO)
 end
 
 -- Proxy methods that delegate to the current picker
@@ -112,3 +108,4 @@ function M.add_watch_autocmd()
 end
 
 return M
+
