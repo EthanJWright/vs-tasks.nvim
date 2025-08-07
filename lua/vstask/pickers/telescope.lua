@@ -11,6 +11,9 @@ local core = require("vstask.picker_core")
 
 local M = {}
 
+-- Picker identification
+M.name = "telescope"
+
 -- Telescope-specific state
 local current_picker = nil
 local mappings = vim.tbl_deep_extend("force", {}, core.default_mappings)
@@ -57,11 +60,11 @@ local function handle_telescope_direction(direction, prompt_bufnr, selection_lis
 			label = "CMD: " .. current_line,
 			args = nil
 		}}
-		core.handle_direction(direction, fake_selection, fake_selection_list, false, opts, refresh_picker)
+		core.handle_direction(direction, fake_selection, fake_selection_list, false, opts, refresh_picker, M.name)
 		return
 	end
 
-	core.handle_direction(direction, selection, selection_list, is_launch, opts, refresh_picker)
+	core.handle_direction(direction, selection, selection_list, is_launch, opts, refresh_picker, M.name)
 end
 
 -- Create telescope picker with common setup
@@ -335,7 +338,7 @@ end
 
 -- Command input implementation
 function M.command_input(opts)
-	return core.create_command_input_handler(mappings, refresh_picker)(opts)
+	return core.create_command_input_handler(mappings, refresh_picker, M.name)(opts)
 end
 
 -- Configuration functions

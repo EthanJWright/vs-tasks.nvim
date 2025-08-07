@@ -4,6 +4,9 @@ local core = require("vstask.picker_core")
 
 local M = {}
 
+-- Picker identification
+M.name = "snacks.nvim"
+
 -- Snacks-specific state
 local mappings = vim.tbl_deep_extend("force", {}, core.default_mappings)
 
@@ -15,49 +18,69 @@ end
 
 -- Helper function to handle direction-based task execution
 local function handle_snacks_direction(direction, item, selection_list, is_launch, opts)
+	-- Debug logging
+	vim.notify(string.format("VS Tasks (snacks): Key pressed, direction=%s, task=%s", direction, item.name or "unknown"), vim.log.levels.INFO)
+	
 	local selection = { index = item.idx }
-	core.handle_direction(direction, selection, selection_list, is_launch, opts, refresh_picker)
+	core.handle_direction(direction, selection, selection_list, is_launch, opts, refresh_picker, M.name)
 end
 
--- Helper function to create snacks actions for different directions
-local function create_snacks_actions(selection_list, is_launch, opts)
-	return {
-		-- Default action (current)
-		["<CR>"] = function(picker, item)
+-- Helper function to create snacks actions and key bindings
+local function create_snacks_config(selection_list, is_launch, opts)
+	-- Actions with descriptive names (not key strings)
+	local actions = {
+		confirm = function(picker, item)
 			picker:close()
 			handle_snacks_direction("current", item, selection_list, is_launch, opts)
 		end,
-		-- Vertical split
-		[mappings.vertical] = function(picker, item)
+		vertical = function(picker, item)
 			picker:close()
 			handle_snacks_direction("vertical", item, selection_list, is_launch, opts)
 		end,
-		-- Horizontal split
-		[mappings.split] = function(picker, item)
+		split = function(picker, item)
 			picker:close()
 			handle_snacks_direction("horizontal", item, selection_list, is_launch, opts)
 		end,
-		-- Tab
-		[mappings.tab] = function(picker, item)
+		tab = function(picker, item)
 			picker:close()
 			handle_snacks_direction("tab", item, selection_list, is_launch, opts)
 		end,
-		-- Background job
-		[mappings.background_job] = function(picker, item)
+		background_job = function(picker, item)
 			picker:close()
 			handle_snacks_direction("background_job", item, selection_list, is_launch, opts)
 		end,
-		-- Watch job
-		[mappings.watch_job] = function(picker, item)
+		watch_job = function(picker, item)
 			picker:close()
 			handle_snacks_direction("watch_job", item, selection_list, is_launch, opts)
 		end,
-		-- Run command
-		[mappings.run] = function(picker, item)
+		run = function(picker, item)
 			picker:close()
 			handle_snacks_direction("run", item, selection_list, is_launch, opts)
 		end,
 	}
+	
+	-- Key mappings to action names
+	local win_config = {
+		input = {
+			keys = {
+				[mappings.vertical] = { "vertical", mode = { "n", "i" } },
+				[mappings.split] = { "split", mode = { "n", "i" } },
+				[mappings.tab] = { "tab", mode = { "n", "i" } },
+				[mappings.background_job] = { "background_job", mode = { "n", "i" } },
+				[mappings.watch_job] = { "watch_job", mode = { "n", "i" } },
+				[mappings.run] = { "run", mode = { "n", "i" } },
+			}
+		}
+	}
+	
+	-- Debug logging
+	local debug_keys = {}
+	for key, action in pairs(win_config.input.keys) do
+		table.insert(debug_keys, key .. "→" .. action[1])
+	end
+	vim.notify("VS Tasks (snacks): Key mappings: " .. table.concat(debug_keys, ", "), vim.log.levels.INFO)
+	
+	return actions, win_config
 end
 
 -- Tasks picker implementation
@@ -97,6 +120,8 @@ function M.tasks(opts)
 		})
 	end
 
+	local actions, win_config = create_snacks_config(task_list, false, opts)
+	
 	return require("snacks").picker.pick({
 		source = "vstask_tasks",
 		title = "Tasks",
@@ -111,11 +136,9 @@ function M.tasks(opts)
 			return ret
 		end,
 		preview = "preview",
-		actions = create_snacks_actions(task_list, false, opts),
-		confirm = function(picker, item)
-			picker:close()
-			handle_snacks_direction("current", item, task_list, false, opts)
-		end,
+		actions = actions,
+		confirm = actions.confirm,
+		win = win_config,
 	})
 end
 
@@ -296,16 +319,17 @@ function M.jobs(opts)
 		})
 	end
 
+	-- Create job-specific actions and key bindings
 	local job_actions = {
 		-- Open job buffer
-		["<CR>"] = function(picker, item)
+		confirm = function(picker, item)
 			picker:close()
 			local job = jobs_list[item.idx]
 			Job.job_selected(job.id)
 			Job.open_buffer(job.label)
 		end,
 		-- Kill job
-		[mappings.kill_job] = function(picker, item)
+		kill_job = function(picker, item)
 			local job = jobs_list[item.idx]
 			if not job or not job.id then
 				return
@@ -318,7 +342,7 @@ function M.jobs(opts)
 			M.jobs(opts)
 		end,
 		-- Toggle watch
-		[mappings.watch_job] = function(picker, item)
+		toggle_watch = function(picker, item)
 			local job = jobs_list[item.idx]
 			picker:close()
 			Job.toggle_watch(job.id)
@@ -326,7 +350,7 @@ function M.jobs(opts)
 			M.jobs(opts)
 		end,
 		-- Open vertical
-		[mappings.vertical] = function(picker, item)
+		open_vertical = function(picker, item)
 			picker:close()
 			local job = jobs_list[item.idx]
 			Job.job_selected(job.id)
@@ -334,7 +358,7 @@ function M.jobs(opts)
 			Job.open_buffer(job.label)
 		end,
 		-- Open horizontal
-		[mappings.split] = function(picker, item)
+		open_horizontal = function(picker, item)
 			picker:close()
 			local job = jobs_list[item.idx]
 			Job.job_selected(job.id)
@@ -343,6 +367,25 @@ function M.jobs(opts)
 		end,
 	}
 
+	-- Key mappings for jobs
+	local job_win_config = {
+		input = {
+			keys = {
+				[mappings.vertical] = { "open_vertical", mode = { "n", "i" } },
+				[mappings.split] = { "open_horizontal", mode = { "n", "i" } },
+				[mappings.kill_job] = { "kill_job", mode = { "n", "i" } },
+				[mappings.watch_job] = { "toggle_watch", mode = { "n", "i" } },
+			}
+		}
+	}
+
+	-- Debug logging for job key mappings
+	local debug_job_keys = {}
+	for key, action in pairs(job_win_config.input.keys) do
+		table.insert(debug_job_keys, key .. "→" .. action[1])
+	end
+	vim.notify("VS Tasks (snacks): Job key mappings: " .. table.concat(debug_job_keys, ", "), vim.log.levels.INFO)
+
 	return require("snacks").picker.pick({
 		source = "vstask_jobs",
 		title = "Jobs",
@@ -350,73 +393,14 @@ function M.jobs(opts)
 		format = "text",
 		preview = "preview",
 		actions = job_actions,
-		confirm = function(picker, item)
-			picker:close()
-			local job = jobs_list[item.idx]
-			Job.job_selected(job.id)
-			Job.open_buffer(job.label)
-		end,
+		confirm = job_actions.confirm,
+		win = job_win_config,
 	})
 end
 
 -- Command input implementation
 function M.command_input(opts)
-	opts = opts or {}
-
-	-- Use vim.ui.input for command input since snacks doesn't have a built-in input picker
-	local selected_key = nil
-	local input_opts = {
-		prompt = "Enter command: ",
-		callback = function(command)
-			if command and command ~= "" then
-				-- Store the command
-				core.last_cmd = command
-
-				-- Get the key that was used to submit
-				local key = selected_key or mappings.current
-				local direction
-				for k, v in pairs(mappings) do
-					if v == key then
-						direction = k
-						break
-					end
-				end
-
-				Job.start_job({
-					label = "Command: " .. command,
-					command = command,
-					silent = false,
-					watch = direction == "watch_job",
-					terminal = direction ~= "background_job",
-					direction = direction,
-					on_complete = refresh_picker,
-				})
-
-				-- Schedule the mode change to happen after the input is processed
-				vim.schedule(function()
-					vim.cmd("stopinsert")
-				end)
-			end
-		end,
-	}
-
-	-- Create custom mappings for the input buffer
-	local map_opts = { noremap = true, silent = true }
-	local function create_key_handler(key)
-		return function()
-			selected_key = key
-			vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<CR>", true, true, true), "n")
-		end
-	end
-
-	vim.keymap.set("i", mappings.background_job, create_key_handler(mappings.background_job), map_opts)
-	vim.keymap.set("i", mappings.vertical, create_key_handler(mappings.vertical), map_opts)
-	vim.keymap.set("i", mappings.split, create_key_handler(mappings.split), map_opts)
-	vim.keymap.set("i", mappings.tab, create_key_handler(mappings.tab), map_opts)
-	vim.keymap.set("i", mappings.watch_job, create_key_handler(mappings.watch_job), map_opts)
-
-	-- Show the input dialog
-	vim.ui.input(input_opts, input_opts.callback)
+	return core.create_command_input_handler(mappings, refresh_picker, M.name)(opts)
 end
 
 -- Configuration functions

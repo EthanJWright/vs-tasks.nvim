@@ -68,7 +68,7 @@ function M.find_task_by_label(task_list, label)
 end
 
 -- Execute pre launch task
-function M.execute_pre_launch_task(pre_launch_task, main_launch_config, direction, opts, on_refresh)
+function M.execute_pre_launch_task(pre_launch_task, main_launch_config, direction, opts, on_refresh, picker_name)
 	local pre_task_command = Job.clean_command(pre_launch_task.command, pre_launch_task.options)
 	if pre_launch_task.args then
 		pre_task_command = Parse.replace(pre_task_command)
@@ -83,6 +83,10 @@ function M.execute_pre_launch_task(pre_launch_task, main_launch_config, directio
 		end
 
 		local execute_launch = function(prepared_command)
+			-- Log launch execution with picker info
+			picker_name = picker_name or "unknown"
+			vim.notify(string.format("VS Tasks (%s): Running launch '%s'", picker_name, main_launch_config.name), vim.log.levels.INFO)
+			
 			Job.start_job({
 				label = main_launch_config.name,
 				command = prepared_command,
@@ -113,7 +117,7 @@ function M.execute_pre_launch_task(pre_launch_task, main_launch_config, directio
 end
 
 -- Handle pre launch task
-function M.handle_pre_launch_task(launch_config, direction, opts, on_refresh)
+function M.handle_pre_launch_task(launch_config, direction, opts, on_refresh, picker_name)
 	if not launch_config.preLaunchTask then
 		return false
 	end
@@ -124,7 +128,7 @@ function M.handle_pre_launch_task(launch_config, direction, opts, on_refresh)
 
 	if pre_launch_task then
 		vim.notify("Running preLaunchTask: " .. pre_launch_task_name, vim.log.levels.INFO)
-		M.execute_pre_launch_task(pre_launch_task, launch_config, direction, opts, on_refresh)
+		M.execute_pre_launch_task(pre_launch_task, launch_config, direction, opts, on_refresh, picker_name)
 		return true
 	else
 		vim.notify("preLaunchTask '" .. pre_launch_task_name .. "' not found in tasks", vim.log.levels.WARN)
@@ -133,7 +137,7 @@ function M.handle_pre_launch_task(launch_config, direction, opts, on_refresh)
 end
 
 -- Handle direction for task execution
-function M.handle_direction(direction, selection, selection_list, is_launch, opts, on_refresh)
+function M.handle_direction(direction, selection, selection_list, is_launch, opts, on_refresh, picker_name)
 	local command, options, label, args
 
 	if selection == nil or direction == "run" then
@@ -159,7 +163,7 @@ function M.handle_direction(direction, selection, selection_list, is_launch, opt
 		Parse.Used_launch(label)
 
 		-- Handle preLaunchTask
-		if M.handle_pre_launch_task(launch_config, direction, opts, on_refresh) then
+		if M.handle_pre_launch_task(launch_config, direction, opts, on_refresh, picker_name) then
 			return
 		end
 	else
@@ -196,6 +200,10 @@ function M.handle_direction(direction, selection, selection_list, is_launch, opt
 	end
 
 	local process = function(prepared_command)
+		-- Log task execution with picker info
+		picker_name = picker_name or "unknown"
+		vim.notify(string.format("VS Tasks (%s): Running task '%s'", picker_name, label), vim.log.levels.INFO)
+		
 		Job.start_job({
 			label = label,
 			command = prepared_command,
@@ -280,7 +288,7 @@ function M.restart_watched_jobs(on_refresh)
 end
 
 -- Command input helper
-function M.create_command_input_handler(mappings, on_refresh)
+function M.create_command_input_handler(mappings, on_refresh, picker_name)
 	return function(opts)
 		opts = opts or {}
 
@@ -303,6 +311,10 @@ function M.create_command_input_handler(mappings, on_refresh)
 						end
 					end
 
+					-- Log command execution with picker info
+					picker_name = picker_name or "unknown"
+					vim.notify(string.format("VS Tasks (%s): Running command '%s'", picker_name, command), vim.log.levels.INFO)
+					
 					Job.start_job({
 						label = "Command: " .. command,
 						command = command,
