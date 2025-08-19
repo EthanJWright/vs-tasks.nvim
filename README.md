@@ -196,16 +196,21 @@ scripts.
 VS Tasks supports multiple picker backends:
 
 ### Telescope (Default)
+
 - Full-featured picker with preview
 - Requires `nvim-telescope/telescope.nvim`
 - Load extension: `require("telescope").load_extension("vstask")`
 
 ### snacks.nvim
+
 - Modern picker with excellent UX
 - Requires `folke/snacks.nvim`
 - Configure with `picker = "snacks"` in setup
 
+**_Note_** doesn't support dynamic updating of preview as job runs
+
 ### Custom Picker
+
 You can also provide your own picker implementation that follows the picker interface defined in `lua/vstask/picker.lua`.
 
 ## Configuration
@@ -218,6 +223,7 @@ You can also provide your own picker implementation that follows the picker inte
   ran command
 
 ### With Telescope
+
 Make sure to load the plugin in your telescope config:
 
 ```lua
