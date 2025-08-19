@@ -54,12 +54,14 @@ local function handle_telescope_direction(direction, prompt_bufnr, selection_lis
 		end
 		local current_line = state.get_current_line()
 		local fake_selection = { index = 1 }
-		local fake_selection_list = {{
-			command = current_line,
-			options = nil,
-			label = "CMD: " .. current_line,
-			args = nil
-		}}
+		local fake_selection_list = {
+			{
+				command = current_line,
+				options = nil,
+				label = "CMD: " .. current_line,
+				args = nil,
+			},
+		}
 		core.handle_direction(direction, fake_selection, fake_selection_list, false, opts, refresh_picker, M.name)
 		return
 	end
@@ -355,3 +357,4 @@ function M.add_watch_autocmd()
 end
 
 return M
+

@@ -55,7 +55,7 @@ local function create_snacks_config(selection_list, is_launch, opts)
 			handle_snacks_direction("run", item, selection_list, is_launch, opts)
 		end,
 	}
-	
+
 	-- Key mappings to action names
 	local win_config = {
 		input = {
@@ -66,11 +66,10 @@ local function create_snacks_config(selection_list, is_launch, opts)
 				[mappings.background_job] = { "background_job", mode = { "n", "i" } },
 				[mappings.watch_job] = { "watch_job", mode = { "n", "i" } },
 				[mappings.run] = { "run", mode = { "n", "i" } },
-			}
-		}
+			},
+		},
 	}
-	
-	
+
 	return actions, win_config
 end
 
@@ -93,13 +92,13 @@ function M.tasks(opts)
 			command = task.command,
 			description = task.description or "",
 			preview = {
-				text = core.create_task_preview_content(task)
-			}
+				text = core.create_task_preview_content(task),
+			},
 		})
 	end
 
 	local actions, win_config = create_snacks_config(task_list, false, opts)
-	
+
 	return require("snacks").picker.pick({
 		source = "vstask_tasks",
 		title = "Tasks",
@@ -139,8 +138,8 @@ function M.launches(opts)
 			program = launch.program,
 			description = launch.type or "",
 			preview = {
-				text = core.create_launch_preview_content(launch)
-			}
+				text = core.create_launch_preview_content(launch),
+			},
 		})
 	end
 
@@ -209,8 +208,8 @@ function M.inputs(opts)
 			value = input_dict["value"] or "",
 			description = description,
 			preview = {
-				text = core.create_input_preview_content(input_dict, description)
-			}
+				text = core.create_input_preview_content(input_dict, description),
+			},
 		})
 		table.insert(selection_list, input_dict)
 	end
@@ -251,8 +250,8 @@ function M.jobs(opts)
 			label = job_info.label,
 			is_running = is_running,
 			preview = {
-				text = core.create_job_preview_content(job_info, is_running)
-			}
+				text = core.create_job_preview_content(job_info, is_running),
+			},
 		})
 	end
 
@@ -271,7 +270,7 @@ function M.jobs(opts)
 			if not job or not job.id then
 				return
 			end
-			
+
 			local background_job = Job.get_background_job(job.id)
 			picker:close()
 			Job.fully_clear_job(background_job)
@@ -312,10 +311,9 @@ function M.jobs(opts)
 				[mappings.split] = { "open_horizontal", mode = { "n", "i" } },
 				[mappings.kill_job] = { "kill_job", mode = { "n", "i" } },
 				[mappings.watch_job] = { "toggle_watch", mode = { "n", "i" } },
-			}
-		}
+			},
+		},
 	}
-
 
 	return require("snacks").picker.pick({
 		source = "vstask_jobs",
@@ -376,3 +374,4 @@ function M.add_watch_autocmd()
 end
 
 return M
+
