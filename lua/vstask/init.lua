@@ -2,19 +2,46 @@ local M = {}
 
 M.Predefined = require("vstask.Predefined")
 M.Config = require("vstask.Config")
-M.Telescope = require("vstask.Telescope")
 M.Parse = require("vstask.Parse")
+
+-- Picker interface
+local picker = require("vstask.picker")
+
+-- Set default picker to Telescope
+local telescope_picker = require("vstask.pickers.telescope")
+picker.set_picker(telescope_picker)
+
+-- Legacy compatibility - expose Telescope directly
+M.Telescope = require("vstask.Telescope")
 
 local function config(opts)
 	if opts == nil then
 		return
 	end
+	
+	-- Picker configuration
+	if opts.picker ~= nil then
+		if opts.picker == "telescope" then
+			local telescope_picker = require("vstask.pickers.telescope")
+			picker.set_picker(telescope_picker)
+		elseif opts.picker == "snacks" then
+			local snacks_picker = require("vstask.pickers.snacks")
+			picker.set_picker(snacks_picker)
+		else
+			-- Custom picker implementation
+			picker.set_picker(opts.picker)
+		end
+	end
+	
+	-- Legacy telescope configuration (still supported)
 	if opts.telescope_keys ~= nil then
-		M.Telescope.Set_mappings(opts.telescope_keys)
+		picker.set_mappings(opts.telescope_keys)
 	end
 	if opts.term_opts ~= nil then
-		M.Telescope.Set_term_opts(opts.term_opts)
+		picker.set_term_opts(opts.term_opts)
 	end
+	
+	-- Parse module configuration
 	if opts.cache_strategy ~= nil then
 		M.Parse.Cache_strategy(opts.cache_strategy)
 	end
@@ -52,6 +79,17 @@ function M.setup(opts)
 	config(opts)
 end
 
-M.get_last = M.Telescope.Get_last
+-- Expose picker interface methods
+M.tasks = picker.tasks
+M.launches = picker.launches
+M.inputs = picker.inputs
+M.jobs = picker.jobs
+M.command = picker.command_input
+
+-- Legacy compatibility
+M.get_last = picker.get_last
+
+-- Expose picker interface for advanced usage
+M.picker = picker
 
 return M
