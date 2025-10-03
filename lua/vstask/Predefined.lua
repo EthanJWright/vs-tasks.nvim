@@ -98,10 +98,9 @@ local get_exec_path = function()
   return vim.fn.executable()
 end
 
-
-
+-- get the absolute path to the current file
 local get_file = function()
-  return get_filename(vim.fn.bufname())
+  vim.fn.expand("%:p")
 end
 
 -- get the file workspace folder
